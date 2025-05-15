@@ -1,25 +1,28 @@
-// Initialize Firebase (replace with your config)
+// Initialize Firebase
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+  apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
+  authDomain: "bench-rating.firebaseapp.com",
+  projectId: "bench-rating",
+  storageBucket: "bench-rating.firebasestorage.app",
+  messagingSenderId: "601862513386",
+  appId: "1:601862513386:web:485fa761244ea436a4ad93"
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+// Initialize map
 const map = L.map('map', {
   maxBounds: [[48.5, -11], [61.5, 4]],
   maxBoundsViscosity: 1.0
 }).setView([54.5, -3], 6);
 
+// Tile layer
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+// Custom icon
 const benchIcon = L.divIcon({
   className: 'emoji-marker',
   html: '🪑',
@@ -27,10 +30,11 @@ const benchIcon = L.divIcon({
   iconAnchor: [12, 24]
 });
 
+// Marker clustering
 const markerCluster = L.markerClusterGroup();
 map.addLayer(markerCluster);
 
-// Load all tile chunks
+// Load tiles (chunks)
 for (let row = 0; row < 10; row++) {
   for (let col = 0; col < 10; col++) {
     const url = `data/tile_${row}_${col}.geojson`;
@@ -40,55 +44,53 @@ for (let row = 0; row < 10; row++) {
         return res.json();
       })
       .then(data => {
-        L.geoJSON(data, {
+        const layer = L.geoJSON(data, {
           pointToLayer: (feature, latlng) => {
             const marker = L.marker(latlng, { icon: benchIcon });
-            const id = feature.properties.id || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}`;
+            const benchId = feature.properties?.id || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}`;
+            const name = feature.properties?.name || "Unnamed Bench";
 
-            marker.bindPopup(createPopupHtml(id, feature));
+            marker.bindPopup(`<div><strong>${name}</strong><br><div id="rating-${benchId}">Loading rating...</div><label for="rate-${benchId}">Rate:</label> 
+              <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
+                <option value="">--</option>
+                ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
+              </select></div>`);
+
+            marker.on('popupopen', () => loadRating(benchId));
+
             return marker;
           }
-        }).eachLayer(layer => markerCluster.addLayer(layer));
+        });
+        markerCluster.addLayer(layer);
       })
       .catch(err => console.warn(`Failed to load ${url}:`, err));
   }
 }
 
-// Generate rating popup content
-function createPopupHtml(benchId, feature) {
-  const name = feature.properties?.name || "Unnamed Bench";
-  const ratingDivId = `rating-${benchId}`;
-  const html = `
-    <div><strong>${name}</strong></div>
-    <div class="rating">
-      <label for="rate-${benchId}">Rate this bench:</label>
-      <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
-        <option value="">--</option>
-        ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-      </select>
-    </div>
-    <div id="${ratingDivId}">Loading average rating...</div>
-  `;
+// Lazy load rating when popup opens
+function loadRating(benchId) {
+  const el = document.getElementById(`rating-${benchId}`);
+  if (!el) return;
 
-  // Load existing average rating
   db.collection("benchRatings").doc(benchId).get().then(doc => {
     if (doc.exists) {
       const data = doc.data();
       const avg = data.total / data.count;
-      document.getElementById(ratingDivId).innerText = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
+      el.innerText = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
     } else {
-      document.getElementById(ratingDivId).innerText = "No ratings yet.";
+      el.innerText = "No ratings yet.";
     }
+  }).catch(() => {
+    el.innerText = "Rating failed to load.";
   });
-
-  return html;
 }
 
 // Submit user rating
 function submitRating(benchId, value) {
-  const ref = db.collection("benchRatings").doc(benchId);
   const rating = parseInt(value);
+  if (!rating) return;
 
+  const ref = db.collection("benchRatings").doc(benchId);
   ref.get().then(doc => {
     if (doc.exists) {
       const data = doc.data();
@@ -102,7 +104,7 @@ function submitRating(benchId, value) {
   });
 }
 
-// Search with Nominatim
+// Nominatim search
 function searchLocation() {
   const query = document.getElementById('searchInput').value;
   if (!query) return;
