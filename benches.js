@@ -1,15 +1,24 @@
-// Initialize map
-const map = L.map('map').setView([54.5, -3], 6);
+// Initialize Firebase (replace with your config)
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const map = L.map('map', {
+  maxBounds: [[48.5, -11], [61.5, 4]],
+  maxBoundsViscosity: 1.0
+}).setView([54.5, -3], 6);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
-
-// Limit view to UK
-map.setMaxBounds([
-  [48.5, -11], // Southwest corner
-  [61.5, 3]    // Northeast corner
-]);
 
 const benchIcon = L.divIcon({
   className: 'emoji-marker',
@@ -18,136 +27,95 @@ const benchIcon = L.divIcon({
   iconAnchor: [12, 24]
 });
 
-// Marker cluster group
-const clusterGroup = L.markerClusterGroup();
-map.addLayer(clusterGroup);
+const markerCluster = L.markerClusterGroup();
+map.addLayer(markerCluster);
 
-// UK grid tile system
-const latMin = 49.0, latMax = 61.0;
-const lonMin = -9.0, lonMax = 2.0;
-const rows = 10, cols = 10;
-const latStep = (latMax - latMin) / rows;
-const lonStep = (lonMax - lonMin) / cols;
+// Load all tile chunks
+for (let row = 0; row < 10; row++) {
+  for (let col = 0; col < 10; col++) {
+    const url = `data/tile_${row}_${col}.geojson`;
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        L.geoJSON(data, {
+          pointToLayer: (feature, latlng) => {
+            const marker = L.marker(latlng, { icon: benchIcon });
+            const id = feature.properties.id || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}`;
 
-const loadedTiles = new Set();
-
-function getTileIndices(bounds) {
-  const tiles = [];
-  const minLat = Math.max(bounds.getSouth(), latMin);
-  const maxLat = Math.min(bounds.getNorth(), latMax);
-  const minLon = Math.max(bounds.getWest(), lonMin);
-  const maxLon = Math.min(bounds.getEast(), lonMax);
-
-  const rowStart = Math.floor((minLat - latMin) / latStep);
-  const rowEnd = Math.floor((maxLat - latMin) / latStep);
-  const colStart = Math.floor((minLon - lonMin) / lonStep);
-  const colEnd = Math.floor((maxLon - lonMin) / lonStep);
-
-  for (let row = rowStart; row <= rowEnd; row++) {
-    for (let col = colStart; col <= colEnd; col++) {
-      if (row >= 0 && row < rows && col >= 0 && col < cols) {
-        tiles.push([row, col]);
-      }
-    }
+            marker.bindPopup(createPopupHtml(id, feature));
+            return marker;
+          }
+        }).eachLayer(layer => markerCluster.addLayer(layer));
+      })
+      .catch(err => console.warn(`Failed to load ${url}:`, err));
   }
-
-  return tiles;
 }
 
-function loadTile(row, col) {
-  const tileId = `${row}_${col}`;
-  if (loadedTiles.has(tileId)) return;
+// Generate rating popup content
+function createPopupHtml(benchId, feature) {
+  const name = feature.properties?.name || "Unnamed Bench";
+  const ratingDivId = `rating-${benchId}`;
+  const html = `
+    <div><strong>${name}</strong></div>
+    <div class="rating">
+      <label for="rate-${benchId}">Rate this bench:</label>
+      <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
+        <option value="">--</option>
+        ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
+      </select>
+    </div>
+    <div id="${ratingDivId}">Loading average rating...</div>
+  `;
 
-  const url = `data/tile_${tileId}.geojson`;
-  fetch(url)
-    .then(res => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    })
-    .then(data => {
-      const layer = L.geoJSON(data, {
-        pointToLayer: (feature, latlng) => {
-          const marker = L.marker(latlng, { icon: benchIcon });
-          const name = feature.properties?.name || 'Unnamed Bench';
-          const benchId = feature.properties?.id || `${latlng.lat},${latlng.lng}`;
+  // Load existing average rating
+  db.collection("benchRatings").doc(benchId).get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      const avg = data.total / data.count;
+      document.getElementById(ratingDivId).innerText = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
+    } else {
+      document.getElementById(ratingDivId).innerText = "No ratings yet.";
+    }
+  });
 
-          marker.bindPopup(`
-            <b>${name}</b><br>
-            <div id="rating-${benchId.replace(/[^a-zA-Z0-9]/g, '')}">
-              <em>Loading rating...</em>
-            </div>
-          `);
-          marker.on('popupopen', () => showRating(benchId));
-          return marker;
-        }
+  return html;
+}
+
+// Submit user rating
+function submitRating(benchId, value) {
+  const ref = db.collection("benchRatings").doc(benchId);
+  const rating = parseInt(value);
+
+  ref.get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      ref.set({
+        total: data.total + rating,
+        count: data.count + 1
       });
-
-      clusterGroup.addLayer(layer);
-      loadedTiles.add(tileId);
-    })
-    .catch(err => console.warn(`Tile ${tileId} failed:`, err));
-}
-
-function loadVisibleTiles() {
-  const bounds = map.getBounds();
-  const tiles = getTileIndices(bounds);
-  tiles.forEach(([row, col]) => loadTile(row, col));
-}
-
-map.on('moveend', loadVisibleTiles);
-loadVisibleTiles();
-
-// Firebase config
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_BUCKET",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
-// Show and update ratings
-function showRating(benchId) {
-  const divId = `rating-${benchId.replace(/[^a-zA-Z0-9]/g, '')}`;
-  const ratingDiv = document.getElementById(divId);
-  if (!ratingDiv) return;
-
-  const docRef = db.collection("benchRatings").doc(benchId);
-
-  docRef.get().then(doc => {
-    let current = doc.exists ? doc.data().rating : 0;
-    ratingDiv.innerHTML = `
-      Rating: ${current.toFixed(1)} / 10<br>
-      <input type="range" min="0" max="10" value="${current}" step="1" 
-        oninput="this.nextElementSibling.innerText = this.value" 
-        onchange="submitRating('${benchId}', this.value)" />
-      <span>${current}</span>
-    `;
+    } else {
+      ref.set({ total: rating, count: 1 });
+    }
   });
 }
 
-function submitRating(benchId, value) {
-  db.collection("benchRatings").doc(benchId).set({ rating: parseFloat(value) });
-}
-
-// Search bar function
+// Search with Nominatim
 function searchLocation() {
   const query = document.getElementById('searchInput').value;
   if (!query) return;
 
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
-  fetch(url)
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=gb`)
     .then(res => res.json())
-    .then(results => {
-      if (results.length > 0) {
-        const { lat, lon } = results[0];
-        map.setView([parseFloat(lat), parseFloat(lon)], 14);
-      } else {
-        alert('Location not found.');
+    .then(data => {
+      if (data.length === 0) {
+        alert("Place not found.");
+        return;
       }
-    });
+      const { lat, lon } = data[0];
+      map.setView([parseFloat(lat), parseFloat(lon)], 15);
+    })
+    .catch(err => console.error('Geocoding error:', err));
 }
