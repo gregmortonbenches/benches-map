@@ -82,4 +82,4 @@ function loadVisibleTiles() {
 map.on('moveend', loadVisibleTiles);
 
 // Initial load
-load
+loadVisibleTiles();
