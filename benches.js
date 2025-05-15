@@ -4,13 +4,26 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
 }).addTo(map);
 
-const benches = [
-  { lat: 51.5074, lon: -0.1278, name: "Bench in London" },
-  { lat: 53.4808, lon: -2.2426, name: "Bench in Manchester" },
-  { lat: 55.9533, lon: -3.1883, name: "Bench in Edinburgh" },
-];
-
-benches.forEach(bench => {
-  L.marker([bench.lat, bench.lon]).addTo(map)
-    .bindPopup(`<b>${bench.name}</b>`);
+const benchIcon = L.divIcon({
+  className: 'emoji-marker',
+  html: '🪑',
+  iconSize: [24, 24],
+  iconAnchor: [12, 24]
 });
+
+// Fetch your GeoJSON file (make sure benches.geojson is in the same folder)
+fetch('benches.geojson')
+  .then(response => response.json())
+  .then(data => {
+    L.geoJSON(data, {
+      pointToLayer: function(feature, latlng) {
+        return L.marker(latlng, {icon: benchIcon});
+      },
+      onEachFeature: function(feature, layer) {
+        if (feature.properties && feature.properties.name) {
+          layer.bindPopup(`<b>${feature.properties.name}</b>`);
+        }
+      }
+    }).addTo(map);
+  })
+  .catch(err => console.error('Error loading GeoJSON:', err));
