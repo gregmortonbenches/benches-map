@@ -1,44 +1,53 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>UK Benches Map</title>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UK Benches Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet/dist/leaflet.css"
   />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"
-  />
+
+  <!-- MarkerCluster CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"
   />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet-search/dist/leaflet-search.min.css"
-  />
+
+  <!-- Geocoder CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"
   />
+
   <style>
     #map {
       height: 100vh;
+      width: 100%;
     }
     .emoji-marker {
       font-size: 20px;
+      line-height: 24px;
+      text-align: center;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
+
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-  <script src="https://unpkg.com/leaflet-search/dist/leaflet-search.min.js"></script>
+
+  <!-- Geocoder JS -->
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+  <!-- Your main JS -->
   <script src="benches.js"></script>
 </body>
 </html>
