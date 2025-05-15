@@ -1,44 +1,36 @@
-const map = L.map('map').setView([54.5, -3], 6); // Center on UK
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UK Benches Map</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet/dist/leaflet.css"
+  />
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+    .emoji-marker {
+      font-size: 20px;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-}).addTo(map);
+  <!-- Leaflet library -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-const benchIcon = L.divIcon({
-  className: 'emoji-marker',
-  html: '🪑',
-  iconSize: [24, 24],
-  iconAnchor: [12, 24]
-});
-
-const loadChunk = (i) => {
-  const url = `data/chunk_${i}.geojson`;
-
-  fetch(url)
-    .then(response => {
-      if (!response.ok) throw new Error(`Chunk ${i} not found`);
-      return response.json();
-    })
-    .then(data => {
-      L.geoJSON(data, {
-        pointToLayer: function(feature, latlng) {
-          return L.marker(latlng, { icon: benchIcon });
-        },
-        onEachFeature: function(feature, layer) {
-          if (feature.properties && feature.properties.name) {
-            layer.bindPopup(`<b>${feature.properties.name}</b>`);
-          }
-        }
-      }).addTo(map);
-    })
-    .catch(err => {
-      console.warn(`Skipped ${url}: ${err.message}`);
-    });
-};
-
-// Try loading chunks 1 through 30
-for (let i = 1; i <= 30; i++) {
-  loadChunk(i);
-  
-}
-  
+  <!-- Your script (tile-based loading) -->
+  <script src="benches.js"></script>
+</body>
+</html>
