@@ -1,92 +1,147 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Benches Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <!-- MarkerCluster CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-  
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
+// Initialize Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
+  authDomain: "bench-rating.firebaseapp.com",
+  projectId: "bench-rating",
+  storageBucket: "bench-rating.firebasestorage.app",
+  messagingSenderId: "601862513386",
+  appId: "1:601862513386:web:485fa761244ea436a4ad93"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Cache to avoid duplicate Firebase reads
+const ratingCache = {};
+
+// Initialize map
+const map = L.map('map', {
+  maxBounds: [[48.5, -11], [61.5, 4]],
+  maxBoundsViscosity: 1.0
+}).setView([54.5, -3], 6);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+// Custom bench icon
+const benchIcon = L.divIcon({
+  className: 'emoji-marker',
+  html: '🪑',
+  iconSize: [24, 24],
+  iconAnchor: [12, 24]
+});
+
+// Marker clustering
+const markerCluster = L.markerClusterGroup();
+map.addLayer(markerCluster);
+
+// Load tile chunks
+for (let row = 0; row < 10; row++) {
+  for (let col = 0; col < 10; col++) {
+    const url = `data/tile_${row}_${col}.geojson`;
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const layer = L.geoJSON(data, {
+          pointToLayer: (feature, latlng) => {
+            const benchId = feature.properties?.id ||
+              `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}_${Math.floor(Math.random() * 1000)}`;
+            const name = feature.properties?.name || "Unnamed Bench";
+
+            const marker = L.marker(latlng, { icon: benchIcon });
+            marker.bindPopup(`
+              <div>
+                <strong>${name}</strong><br>
+                <div id="rating-${benchId}">Loading rating...</div>
+                <label for="rate-${benchId}">Rate:</label>
+                <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
+                  <option value="">--</option>
+                  ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
+                </select>
+              </div>
+            `);
+            marker.on('popupopen', () => loadRating(benchId));
+            return marker;
+          }
+        });
+        markerCluster.addLayer(layer);
+      })
+      .catch(err => console.warn(`Failed to load ${url}:`, err));
+  }
+}
+
+// Load rating with caching
+function loadRating(benchId) {
+  const el = document.getElementById(`rating-${benchId}`);
+  if (!el) return;
+
+  if (ratingCache[benchId]) {
+    el.innerText = ratingCache[benchId];
+    return;
+  }
+
+  db.collection("benchRatings").doc(benchId).get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      const avg = data.total / data.count;
+      const text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
+      el.innerText = text;
+      ratingCache[benchId] = text;
+    } else {
+      el.innerText = "No ratings yet.";
+      ratingCache[benchId] = "No ratings yet.";
+    }
+  }).catch(() => {
+    el.innerText = "Rating failed to load.";
+  });
+}
+
+// Submit a user rating
+function submitRating(benchId, value) {
+  const rating = parseInt(value);
+  if (!rating || rating < 1 || rating > 10) return;
+
+  const ref = db.collection("benchRatings").doc(benchId);
+  ref.get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      ref.set({
+        total: data.total + rating,
+        count: data.count + 1
+      }, { merge: true });
+    } else {
+      ref.set({ total: rating, count: 1 });
     }
 
-    #header {
-      position: fixed;
-      top: 0;
-      width: 100%;
-      background: white;
-      padding: 0.5em;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      align-items: center;
-      gap: 1em;
-      z-index: 1000;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    // Optional: disable dropdown and say thank you
+    const select = document.getElementById(`rate-${benchId}`);
+    if (select) {
+      select.disabled = true;
     }
 
-    #header h1 {
-      margin: 0;
-      font-size: 1.2em;
-    }
+    // Force refresh the rating display after submission
+    setTimeout(() => loadRating(benchId), 500);
+  });
+}
 
-    #header input[type="text"] {
-      padding: 0.4em;
-      font-size: 1em;
-      width: 250px;
-      max-width: 80vw;
-    }
+// Search using Nominatim
+function searchLocation() {
+  const query = document.getElementById('searchInput').value;
+  if (!query) return;
 
-    #map {
-      position: absolute;
-      top: 60px; /* adjust depending on header height */
-      bottom: 0;
-      left: 0;
-      right: 0;
-    }
-
-    .emoji-marker {
-      font-size: 20px;
-      line-height: 1;
-    }
-
-    .leaflet-popup-content {
-      font-size: 14px;
-    }
-
-    select {
-      margin-top: 4px;
-    }
-  </style>
-</head>
-<body>
-
-  <div id="header">
-    <h1>Benches Map</h1>
-    <input type="text" id="searchInput" placeholder="Search for a place..." />
-    <button onclick="searchLocation()">Search</button>
-  </div>
-  <div id="map"></div>
-
-  <!-- Firebase & Firestore -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-
-  <!-- Leaflet -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-  <!-- MarkerCluster -->
-  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-
-  <!-- Your benches map script -->
-  <script src="benches.js"></script>
-
-</body>
-</html>
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=gb`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.length === 0) {
+        alert("Place not found.");
+        return;
+      }
+      const { lat, lon } = data[0];
+      map.setView([parseFloat(lat), parseFloat(lon)], 15);
+    })
+    .catch(err => console.error('Geocoding error:', err));
+}
