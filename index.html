@@ -1,74 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <title>Benches Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://unpkg.com/leaflet/dist/leaflet.css" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <!-- MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+  
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
       height: 100%;
-    }
-
-    #map {
-      position: absolute;
-      top: 70px;
-      bottom: 0;
-      width: 100%;
+      margin: 0;
     }
 
     #header {
-      background: #f8f9fa;
-      padding: 10px 15px;
+      position: fixed;
+      top: 0;
+      width: 100%;
+      background: white;
+      padding: 0.5em;
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
       align-items: center;
-      gap: 10px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      position: fixed;
-      top: 0;
-      width: 100%;
+      gap: 1em;
       z-index: 1000;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     #header h1 {
       margin: 0;
-      font-size: 1.2rem;
-      text-align: center;
-      width: 100%;
+      font-size: 1.2em;
     }
 
-    #searchInput {
-      padding: 6px;
-      font-size: 1rem;
+    #header input[type="text"] {
+      padding: 0.4em;
+      font-size: 1em;
       width: 250px;
+      max-width: 80vw;
     }
 
-    .rating {
-      margin-top: 5px;
+    #map {
+      position: absolute;
+      top: 60px; /* adjust depending on header height */
+      bottom: 0;
+      left: 0;
+      right: 0;
     }
 
-    .rating select {
-      font-size: 1rem;
-      padding: 4px;
+    .emoji-marker {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .leaflet-popup-content {
+      font-size: 14px;
+    }
+
+    select {
+      margin-top: 4px;
     }
   </style>
 </head>
 <body>
+
   <div id="header">
     <h1>Benches Map</h1>
-    <input type="text" id="searchInput" placeholder="Search for a place..." />
+    <input type="text" id="searchInput" placeholder="Search town, street or postcode">
     <button onclick="searchLocation()">Search</button>
   </div>
+
   <div id="map"></div>
 
+  <!-- Firebase & Firestore -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- MarkerCluster -->
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+
+  <!-- Your benches map script -->
   <script src="benches.js"></script>
+
 </body>
 </html>
