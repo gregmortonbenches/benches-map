@@ -1,11 +1,11 @@
 // Initialize Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
-  authDomain: "bench-rating.firebaseapp.com",
-  projectId: "bench-rating",
-  storageBucket: "bench-rating.firebasestorage.app",
-  messagingSenderId: "601862513386",
-  appId: "1:601862513386:web:485fa761244ea436a4ad93"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
@@ -76,7 +76,7 @@ function loadRating(benchId) {
     if (doc.exists) {
       const data = doc.data();
       const avg = data.total / data.count;
-      el.innerText = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
+      el.innerText = `Average: ${avg.toFixed(1)} / 10 (${data.count} rating${data.count > 1 ? "s" : ""})`;
     } else {
       el.innerText = "No ratings yet.";
     }
