@@ -1,9 +1,17 @@
-const map = L.map('map').setView([54.5, -3], 6); // UK center
+// Initialize map, restricted to UK bounds
+const map = L.map('map', {
+  maxBounds: [
+    [48.5, -11], // SW
+    [61.5, 3]    // NE
+  ],
+  maxBoundsViscosity: 1.0
+}).setView([54.5, -3], 6);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
+  maxZoom: 18,
 }).addTo(map);
 
+// Emoji bench icon
 const benchIcon = L.divIcon({
   className: 'emoji-marker',
   html: '🪑',
@@ -11,126 +19,61 @@ const benchIcon = L.divIcon({
   iconAnchor: [12, 24]
 });
 
+// Marker cluster group
 const markerCluster = L.markerClusterGroup();
-const searchableLayer = L.layerGroup(); // stores only searchable (named) markers
 map.addLayer(markerCluster);
 
-// Add search box for bench names
-const searchControl = new L.Control.Search({
-  layer: searchableLayer,
-  propertyName: 'name',
-  marker: false,
-  moveToLocation: (latlng, title, map) => {
-    map.setView(latlng, 16);
-  }
-});
-map.addControl(searchControl);
-
-// Add geocoder for place/postcode search
-L.Control.geocoder({
-  defaultMarkGeocode: false
-})
-.on('markgeocode', function(e) {
-  const center = e.geocode.center;
-  map.setView(center, 14);
-
-  const nearest = findNearestBench(center);
-  if (nearest) {
-    nearest.openPopup();
-    map.panTo(nearest.getLatLng());
-  } else {
-    alert('No benches found nearby.');
-  }
-})
-.addTo(map);
-
-// UK bounds tiling system
-const latMin = 49.0, latMax = 61.0;
-const lonMin = -9.0, lonMax = 2.0;
-const rows = 10, cols = 10;
-const latStep = (latMax - latMin) / rows;
-const lonStep = (lonMax - lonMin) / cols;
-
-const loadedTiles = new Set();
-
-// Calculate which tiles intersect current view
-function getTileIndices(bounds) {
-  const tiles = [];
-  const minLat = Math.max(bounds.getSouth(), latMin);
-  const maxLat = Math.min(bounds.getNorth(), latMax);
-  const minLon = Math.max(bounds.getWest(), lonMin);
-  const maxLon = Math.min(bounds.getEast(), lonMax);
-
-  const rowStart = Math.floor((minLat - latMin) / latStep);
-  const rowEnd   = Math.floor((maxLat - latMin) / latStep);
-  const colStart = Math.floor((minLon - lonMin) / lonStep);
-  const colEnd   = Math.floor((maxLon - lonMin) / lonStep);
-
-  for (let row = rowStart; row <= rowEnd; row++) {
-    for (let col = colStart; col <= colEnd; col++) {
-      if (row >= 0 && row < rows && col >= 0 && col < cols) {
-        tiles.push([row, col]);
-      }
-    }
-  }
-
-  return tiles;
-}
-
-// Load a specific tile
-function loadTile(row, col) {
-  const tileId = `${row}_${col}`;
-  if (loadedTiles.has(tileId)) return;
-
-  const url = `data/tile_${row}_${col}.geojson`;
+// Load and add all chunks
+const loadChunk = (i) => {
+  const url = `data/chunk_${i}.geojson`;
   fetch(url)
     .then(res => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`Chunk ${i} not found`);
       return res.json();
     })
     .then(data => {
-      const geojsonLayer = L.geoJSON(data, {
-        pointToLayer: (feature, latlng) => {
-          const marker = L.marker(latlng, { icon: benchIcon });
+      const geojson = L.geoJSON(data, {
+        pointToLayer: (feature, latlng) =>
+          L.marker(latlng, { icon: benchIcon }),
+        onEachFeature: (feature, layer) => {
           if (feature.properties?.name) {
-            marker.bindPopup(`<b>${feature.properties.name}</b>`);
-            marker.feature = { properties: { name: feature.properties.name } };
-            searchableLayer.addLayer(marker);
+            layer.bindPopup(`<b>${feature.properties.name}</b>`);
           }
-          return marker;
         }
       });
-
-      markerCluster.addLayer(geojsonLayer);
-      loadedTiles.add(tileId);
+      markerCluster.addLayer(geojson);
     })
-    .catch(err => {
-      console.warn(`Tile ${tileId} failed to load:`, err);
+    .catch(err => console.warn(`Skipped ${url}: ${err.message}`));
+};
+
+// Load chunks 1–30
+for (let i = 1; i <= 30; i++) {
+  loadChunk(i);
+}
+
+// Add geocoder
+const geocoder = L.Control.geocoder({
+  defaultMarkGeocode: false
+})
+  .on('markgeocode', function (e) {
+    const { center } = e.geocode;
+    map.setView(center, 14);
+
+    // Find nearest bench
+    let nearest = null;
+    let minDist = Infinity;
+
+    markerCluster.eachLayer(marker => {
+      const dist = center.distanceTo(marker.getLatLng());
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = marker;
+      }
     });
-}
 
-// Load tiles for visible bounds
-function loadVisibleTiles() {
-  const bounds = map.getBounds();
-  const tiles = getTileIndices(bounds);
-  tiles.forEach(([row, col]) => loadTile(row, col));
-}
-
-map.on('moveend', loadVisibleTiles);
-loadVisibleTiles();
-
-// Find nearest marker from geocode result
-function findNearestBench(latlng) {
-  let nearest = null;
-  let minDist = Infinity;
-
-  searchableLayer.eachLayer(marker => {
-    const dist = map.distance(latlng, marker.getLatLng());
-    if (dist < minDist) {
-      minDist = dist;
-      nearest = marker;
+    if (nearest) {
+      nearest.openPopup();
+      map.panTo(nearest.getLatLng());
     }
-  });
-
-  return nearest;
-}
+  })
+  .addTo(map);
