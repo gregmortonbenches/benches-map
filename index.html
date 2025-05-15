@@ -1,32 +1,74 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>UK Benches Map</title>
+  <title>Benches Map</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+
   <style>
-    #map {
-      height: 100vh;
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
     }
-    .emoji-marker {
-      font-size: 20px;
-      text-align: center;
-      line-height: 24px;
+
+    #header {
+      background: #f8f9fa;
+      padding: 10px 15px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 1000;
+    }
+
+    #header h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      flex: 1 0 120px;
+    }
+
+    #searchInput {
+      flex-grow: 1;
+      min-width: 200px;
+      max-width: 300px;
+      padding: 6px;
+      font-size: 1rem;
+    }
+
+    #map {
+      position: absolute;
+      top: 56px; /* Height of the header */
+      bottom: 0;
+      left: 0;
+      right: 0;
     }
   </style>
 </head>
+
 <body>
+  <div id="header">
+    <h1>Benches Map</h1>
+    <input type="text" id="searchInput" placeholder="Search town, postcode, etc." />
+    <button onclick="searchLocation()">Search</button>
+  </div>
+
   <div id="map"></div>
 
-  <!-- Leaflet -->
+  <!-- Scripts -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js"></script>
-
-  <!-- Your map logic -->
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js"></script>
   <script src="benches.js"></script>
 </body>
 </html>
