@@ -11,6 +11,8 @@ const benchIcon = L.divIcon({
   iconAnchor: [12, 24]
 });
 
+const markers = L.markerClusterGroup(); // Create cluster group
+
 const loadChunk = (i) => {
   const url = `data/chunk_${i}.geojson`;
 
@@ -20,7 +22,7 @@ const loadChunk = (i) => {
       return response.json();
     })
     .then(data => {
-      L.geoJSON(data, {
+      const layer = L.geoJSON(data, {
         pointToLayer: function(feature, latlng) {
           return L.marker(latlng, { icon: benchIcon });
         },
@@ -29,7 +31,8 @@ const loadChunk = (i) => {
             layer.bindPopup(`<b>${feature.properties.name}</b>`);
           }
         }
-      }).addTo(map);
+      });
+      markers.addLayer(layer); // Add markers to the cluster group
     })
     .catch(err => {
       console.warn(`Skipped ${url}: ${err.message}`);
@@ -40,3 +43,6 @@ const loadChunk = (i) => {
 for (let i = 1; i <= 30; i++) {
   loadChunk(i);
 }
+
+// Add clusters to map
+map.addLayer(markers);
