@@ -1,4 +1,4 @@
-const map = L.map('map').setView([54.5, -3], 6);
+const map = L.map('map').setView([54.5, -3], 6); // Center on UK
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
@@ -11,27 +11,32 @@ const benchIcon = L.divIcon({
   iconAnchor: [12, 24]
 });
 
-const totalChunks = 28;
+const loadChunk = (i) => {
+  const url = `data/chunk_${i}.geojson`;
 
-for (let i = 1; i <= totalChunks; i++) {
-  const chunkPath = `data/chunk_${i}.geojson`;
-  console.log(`Fetching: ${chunkPath}`);
-  fetch(chunkPath)
+  fetch(url)
     .then(response => {
-      if (!response.ok) throw new Error(`Failed to load ${chunkPath}`);
+      if (!response.ok) throw new Error(`Chunk ${i} not found`);
       return response.json();
     })
     .then(data => {
-      console.log(`Successfully loaded ${chunkPath}`);
       L.geoJSON(data, {
-        pointToLayer: (feature, latlng) =>
-          L.marker(latlng, { icon: benchIcon }),
-        onEachFeature: (feature, layer) => {
-          if (feature.properties?.name) {
+        pointToLayer: function(feature, latlng) {
+          return L.marker(latlng, { icon: benchIcon });
+        },
+        onEachFeature: function(feature, layer) {
+          if (feature.properties && feature.properties.name) {
             layer.bindPopup(`<b>${feature.properties.name}</b>`);
           }
         }
       }).addTo(map);
     })
-    .catch(err => console.error(err));
+    .catch(err => {
+      console.warn(`Skipped ${url}: ${err.message}`);
+    });
+};
+
+// Try loading chunks 1 through 30
+for (let i = 1; i <= 30; i++) {
+  loadChunk(i);
 }
