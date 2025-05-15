@@ -11,19 +11,27 @@ const benchIcon = L.divIcon({
   iconAnchor: [12, 24]
 });
 
-// Fetch your GeoJSON file (make sure benches.geojson is in the same folder)
-fetch('benches.geojson')
-  .then(response => response.json())
-  .then(data => {
-    L.geoJSON(data, {
-      pointToLayer: function(feature, latlng) {
-        return L.marker(latlng, {icon: benchIcon});
-      },
-      onEachFeature: function(feature, layer) {
-        if (feature.properties && feature.properties.name) {
-          layer.bindPopup(`<b>${feature.properties.name}</b>`);
+const totalChunks = 28; // Update if you split into more or fewer chunks
+
+for (let i = 1; i <= totalChunks; i++) {
+  const chunkPath = `data/chunk_${i}.geojson`;
+
+  fetch(chunkPath)
+    .then(response => {
+      if (!response.ok) throw new Error(`Failed to load ${chunkPath}`);
+      return response.json();
+    })
+    .then(data => {
+      L.geoJSON(data, {
+        pointToLayer: function(feature, latlng) {
+          return L.marker(latlng, { icon: benchIcon });
+        },
+        onEachFeature: function(feature, layer) {
+          if (feature.properties && feature.properties.name) {
+            layer.bindPopup(`<b>${feature.properties.name}</b>`);
+          }
         }
-      }
-    }).addTo(map);
-  })
-  .catch(err => console.error('Error loading GeoJSON:', err));
+      }).addTo(map);
+    })
+    .catch(err => console.error(err));
+}
