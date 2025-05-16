@@ -1,4 +1,4 @@
-// Firebase config
+// Initialize Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
   authDomain: "bench-rating.firebaseapp.com",
@@ -32,7 +32,21 @@ const benchIcon = L.divIcon({
 const markerCluster = L.markerClusterGroup();
 map.addLayer(markerCluster);
 
-// Load GeoJSON
+// Helpers to track if user already rated a bench
+function hasRated(benchId) {
+  const rated = JSON.parse(localStorage.getItem("ratedBenches") || "[]");
+  return rated.includes(benchId);
+}
+
+function markAsRated(benchId) {
+  const rated = JSON.parse(localStorage.getItem("ratedBenches") || "[]");
+  if (!rated.includes(benchId)) {
+    rated.push(benchId);
+    localStorage.setItem("ratedBenches", JSON.stringify(rated));
+  }
+}
+
+// Load GeoJSON tiles
 for (let row = 0; row < 10; row++) {
   for (let col = 0; col < 10; col++) {
     const url = `data/tile_${row}_${col}.geojson`;
@@ -42,30 +56,43 @@ for (let row = 0; row < 10; row++) {
         const layer = L.geoJSON(data, {
           pointToLayer: (feature, latlng) => {
             const props = feature.properties || {};
-            const benchId = props["@id"] || `${latlng.lat}_${latlng.lng}_${Math.random().toString(36).slice(2)}`;
+            const benchId = props["@id"] || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}_${Math.floor(Math.random() * 1000)}`;
             const name = props.name || "Unnamed Bench";
 
-            const extraKeys = ['material', 'colour', 'seats', 'backrest'];
-            const extras = extraKeys.filter(k => props[k]).map(k =>
-              `<div><strong>${k}:</strong> ${props[k]}</div>`).join('');
+            const marker = L.marker(latlng, { icon: benchIcon });
+
+            const extras = ['material', 'colour', 'seats', 'backrest']
+              .filter(key => props[key])
+              .map(key => `<div><strong>${key}:</strong> ${props[key]}</div>`)
+              .join('');
 
             const popupContent = `
               <div class="popup">
                 <strong>${name}</strong>
                 ${extras}
-                <div id="rating-${benchId}"><span class="spinner"></span></div>
+                <div id="rating-${benchId}" class="rating-text"><span class="spinner"></span> Loading rating...</div>
                 <label for="rate-${benchId}">Rate:</label>
                 <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
                   <option value="">--</option>
                   ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
                 </select>
-                <div id="thanks-${benchId}" class="fade-message">Thanks for rating!</div>
+                <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
+                <div id="already-rated-${benchId}" class="already-rated-message hidden">You've already rated this bench.</div>
               </div>
             `;
 
-            const marker = L.marker(latlng, { icon: benchIcon });
             marker.bindPopup(popupContent);
-            marker.on('popupopen', () => loadRating(benchId));
+            marker.on('popupopen', () => {
+              loadRating(benchId);
+
+              const rated = hasRated(benchId);
+              const select = document.getElementById(`rate-${benchId}`);
+              if (select) select.disabled = rated;
+
+              const alreadyMsg = document.getElementById(`already-rated-${benchId}`);
+              if (alreadyMsg) alreadyMsg.classList.toggle('hidden', !rated);
+            });
+
             return marker;
           }
         });
@@ -77,11 +104,9 @@ for (let row = 0; row < 10; row++) {
 
 function loadRating(benchId) {
   const el = document.getElementById(`rating-${benchId}`);
-  const thanks = document.getElementById(`thanks-${benchId}`);
-  if (thanks) thanks.classList.remove('visible');
   if (!el) return;
 
-  el.innerHTML = `<span class="spinner"></span>`;
+  el.innerHTML = `<span class="spinner"></span> Loading rating...`;
 
   if (ratingCache[benchId]) {
     el.innerText = ratingCache[benchId];
@@ -90,16 +115,16 @@ function loadRating(benchId) {
 
   db.collection("benchRatings").doc(benchId).get()
     .then(doc => {
-      let text;
       if (doc.exists) {
         const data = doc.data();
         const avg = data.total / data.count;
-        text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
+        const text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
+        el.innerText = text;
+        ratingCache[benchId] = text;
       } else {
-        text = "No ratings yet.";
+        el.innerText = "No ratings yet.";
+        ratingCache[benchId] = "No ratings yet.";
       }
-      ratingCache[benchId] = text;
-      el.innerText = text;
     })
     .catch(() => {
       el.innerText = "Rating failed to load.";
@@ -114,24 +139,30 @@ function submitRating(benchId, value) {
   ref.get().then(doc => {
     if (doc.exists) {
       const data = doc.data();
-      ref.set({ total: data.total + rating, count: data.count + 1 }, { merge: true });
+      ref.set({
+        total: data.total + rating,
+        count: data.count + 1
+      }, { merge: true });
     } else {
       ref.set({ total: rating, count: 1 });
     }
+
+    markAsRated(benchId);
+    ratingCache[benchId] = null; // Invalidate cache
 
     const select = document.getElementById(`rate-${benchId}`);
     if (select) select.disabled = true;
 
     const thanksEl = document.getElementById(`thanks-${benchId}`);
     if (thanksEl) {
-      thanksEl.classList.add('visible');
-      setTimeout(() => thanksEl.classList.remove('visible'), 2500);
+      thanksEl.classList.remove('hidden');
+      setTimeout(() => thanksEl.classList.add('hidden'), 2500);
     }
 
-    setTimeout(() => {
-      ratingCache[benchId] = null;
-      loadRating(benchId);
-    }, 400);
+    const alreadyMsg = document.getElementById(`already-rated-${benchId}`);
+    if (alreadyMsg) alreadyMsg.classList.remove('hidden');
+
+    setTimeout(() => loadRating(benchId), 500);
   });
 }
 
@@ -142,12 +173,12 @@ function searchLocation() {
   fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=gb`)
     .then(res => res.json())
     .then(data => {
-      if (!data.length) {
+      if (data.length === 0) {
         alert("Place not found.");
         return;
       }
       const { lat, lon } = data[0];
-      map.setView([+lat, +lon], 15);
+      map.setView([parseFloat(lat), parseFloat(lon)], 15);
     })
     .catch(err => console.error('Geocoding error:', err));
 }
