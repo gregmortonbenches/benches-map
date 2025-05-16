@@ -1,4 +1,3 @@
-// Initialize Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
   authDomain: "bench-rating.firebaseapp.com",
@@ -32,7 +31,6 @@ const benchIcon = L.divIcon({
 const markerCluster = L.markerClusterGroup();
 map.addLayer(markerCluster);
 
-// Load GeoJSON tiles
 for (let row = 0; row < 10; row++) {
   for (let col = 0; col < 10; col++) {
     const url = `data/tile_${row}_${col}.geojson`;
@@ -77,47 +75,50 @@ for (let row = 0; row < 10; row++) {
   }
 }
 
+function sanitizeId(id) {
+  return id.replace(/\//g, '_');
+}
+
 function loadRating(benchId) {
+  const safeId = sanitizeId(benchId);
   const el = document.getElementById(`rating-${benchId}`);
   if (!el) return;
 
   el.innerHTML = `<span class="spinner"></span>`;
-  console.log("Loading rating for:", benchId); // Log to track rating load
+  console.log("Loading rating for:", benchId);
 
-  if (ratingCache[benchId]) {
-    el.innerText = ratingCache[benchId];
-    console.log("Rating from cache:", ratingCache[benchId]); // Log cached value
+  if (ratingCache[safeId]) {
+    el.innerText = ratingCache[safeId];
     return;
   }
 
-  db.collection("benchRatings").doc(benchId).get()
+  db.collection("benchRatings").doc(safeId).get()
     .then(doc => {
       if (doc.exists) {
         const data = doc.data();
         const avg = data.total / data.count;
         const text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
         el.innerText = text;
-        ratingCache[benchId] = text;
-        console.log("Loaded rating:", text); // Log loaded data
+        ratingCache[safeId] = text;
       } else {
         el.innerText = "No ratings yet.";
-        ratingCache[benchId] = "No ratings yet.";
-        console.log("No ratings found."); // Log no ratings found
+        ratingCache[safeId] = "No ratings yet.";
       }
     })
-    .catch(() => {
+    .catch(err => {
       el.innerText = "Rating failed to load.";
-      console.error("Error loading rating."); // Log error if Firestore fails
+      console.error("Error loading rating:", err);
     });
 }
 
 function submitRating(benchId, value) {
+  const safeId = sanitizeId(benchId);
   const rating = parseInt(value);
-  console.log("Submitting rating:", benchId, rating); // Log to check submission
-
   if (!rating || rating < 1 || rating > 10) return;
 
-  const ref = db.collection("benchRatings").doc(benchId);
+  const ref = db.collection("benchRatings").doc(safeId);
+  console.log("Submitting rating:", benchId, rating);
+
   ref.get().then(doc => {
     if (doc.exists) {
       const data = doc.data();
@@ -125,10 +126,8 @@ function submitRating(benchId, value) {
         total: data.total + rating,
         count: data.count + 1
       }, { merge: true });
-      console.log("Updated rating:", doc.id, data.total + rating, data.count + 1); // Log to check update
     } else {
       ref.set({ total: rating, count: 1 });
-      console.log("Created new rating:", doc.id, rating); // Log for new rating
     }
 
     const select = document.getElementById(`rate-${benchId}`);
@@ -137,16 +136,10 @@ function submitRating(benchId, value) {
     const thanksEl = document.getElementById(`thanks-${benchId}`);
     if (thanksEl) {
       thanksEl.classList.remove('hidden');
-      console.log("Showing thanks message");
-      setTimeout(() => {
-        console.log("Hiding thanks message");
-        thanksEl.classList.add('hidden');
-      }, 2500);
+      setTimeout(() => thanksEl.classList.add('hidden'), 2500);
     }
 
     setTimeout(() => loadRating(benchId), 500);
-  }).catch(err => {
-    console.error("Error submitting rating:", err); // Log error if Firestore fails
   });
 }
 
