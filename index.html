@@ -76,35 +76,6 @@
       line-height: 1;
     }
 
-    .popup {
-      background-color: #1e1e1e;
-      color: #eee;
-      font-size: 14px;
-      line-height: 1.4;
-      padding: 6px;
-    }
-
-    .popup select {
-      margin-top: 4px;
-      background-color: #2a2a2a;
-      color: white;
-      border: none;
-      padding: 3px;
-      border-radius: 4px;
-    }
-
-    .fade-message {
-      margin-top: 4px;
-      color: #90ee90;
-      font-size: 13px;
-      opacity: 0;
-      transition: opacity 0.4s ease;
-    }
-
-    .fade-message.visible {
-      opacity: 1;
-    }
-
     .spinner {
       display: inline-block;
       width: 12px;
@@ -113,11 +84,37 @@
       border-top: 2px solid #2196F3;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin-left: 5px;
+      margin-right: 6px;
+      vertical-align: middle;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+
+    .fade-message {
+      margin-top: 5px;
+      color: #66ff66;
+      font-size: 13px;
+      opacity: 0;
+      animation: fadeInOut 2.5s ease-in-out;
+    }
+
+    @keyframes fadeInOut {
+      0% { opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .already-rated-message {
+      color: #bbb;
+      font-size: 12px;
+      margin-top: 4px;
     }
 
     @media (max-width: 500px) {
@@ -158,7 +155,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- App script -->
+  <!-- Main JS -->
   <script src="benches.js"></script>
 
 </body>
