@@ -121,6 +121,21 @@
       opacity: 0;
     }
 
+    .rating-stars {
+      display: flex;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .rating-stars span {
+      font-size: 18px;
+      color: #ddd;
+    }
+
+    .rating-stars span.selected {
+      color: #ffd700;
+    }
+
     @media (max-width: 500px) {
       .header {
         flex-direction: column;
@@ -217,12 +232,20 @@
                     <strong>${name}</strong>
                     ${extras}
                     <div id="rating-${benchId}"><span class="spinner"></span></div>
-                    <label for="rate-${benchId}">Rate:</label>
-                    <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
-                      <option value="">--</option>
-                      ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-                    </select>
+                    <label for="comfort-${benchId}">Comfort:</label>
+                    <div id="comfort-${benchId}" class="rating-stars" data-metric="comfort">
+                      ${[1, 2, 3, 4, 5].map(i => `<span onclick="rate('${benchId}', 'comfort', ${i})">★</span>`).join('')}
+                    </div>
+                    <label for="view-${benchId}">View:</label>
+                    <div id="view-${benchId}" class="rating-stars" data-metric="view">
+                      ${[1, 2, 3, 4, 5].map(i => `<span onclick="rate('${benchId}', 'view', ${i})">★</span>`).join('')}
+                    </div>
+                    <label for="ambience-${benchId}">Ambience:</label>
+                    <div id="ambience-${benchId}" class="rating-stars" data-metric="ambience">
+                      ${[1, 2, 3, 4, 5].map(i => `<span onclick="rate('${benchId}', 'ambience', ${i})">★</span>`).join('')}
+                    </div>
                     <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
+                    <div id="overall-rating-${benchId}">Overall Average: Loading...</div>
                   </div>
                 `;
 
@@ -244,10 +267,11 @@
     function loadRating(benchId) {
       const safeId = sanitizeId(benchId);
       const el = document.getElementById(`rating-${benchId}`);
-      if (!el) return;
+      const overallEl = document.getElementById(`overall-rating-${benchId}`);
+      if (!el || !overallEl) return;
 
       el.innerHTML = `<span class="spinner"></span>`;
-      console.log("Loading rating for:", benchId);
+      overallEl.innerText = "Overall Average: Loading...";
 
       if (ratingCache[safeId]) {
         el.innerText = ratingCache[safeId];
@@ -258,42 +282,47 @@
         .then(doc => {
           if (doc.exists) {
             const data = doc.data();
-            const avg = data.total / data.count;
-            const text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
+            const avg = (data.comfort + data.view + data.ambience) / 3;
+            const text = `Comfort: ${data.comfort}, View: ${data.view}, Ambience: ${data.ambience}. Overall Average: ${avg.toFixed(1)}`;
             el.innerText = text;
+            overallEl.innerText = `Overall Average: ${avg.toFixed(1)}`;
             ratingCache[safeId] = text;
           } else {
             el.innerText = "No ratings yet.";
+            overallEl.innerText = "No ratings yet.";
             ratingCache[safeId] = "No ratings yet.";
           }
         })
         .catch(err => {
           el.innerText = "Rating failed to load.";
+          overallEl.innerText = "Rating failed to load.";
           console.error("Error loading rating:", err);
         });
     }
 
-    function submitRating(benchId, value) {
+    function rate(benchId, metric, rating) {
       const safeId = sanitizeId(benchId);
-      const rating = parseInt(value);
-      if (!rating || rating < 1 || rating > 10) return;
-
       const ref = db.collection("benchRatings").doc(safeId);
-      console.log("Submitting rating:", benchId, rating);
+      console.log(`Rating ${metric}: ${rating} for ${benchId}`);
 
       ref.get().then(doc => {
-        if (doc.exists) {
-          const data = doc.data();
-          ref.set({
-            total: data.total + rating,
-            count: data.count + 1
-          }, { merge: true });
-        } else {
-          ref.set({ total: rating, count: 1 });
-        }
+        let newData = doc.exists ? doc.data() : { comfort: 0, view: 0, ambience: 0, count: 0 };
+        newData[metric] = rating;
+        newData.count += 1;
 
-        const select = document.getElementById(`rate-${benchId}`);
-        if (select) select.disabled = true;
+        ref.set(newData, { merge: true });
+
+        // Update the UI
+        const metricDiv = document.getElementById(`${metric}-${benchId}`);
+        if (metricDiv) {
+          metricDiv.querySelectorAll("span").forEach((span, index) => {
+            if (index < rating) {
+              span.classList.add("selected");
+            } else {
+              span.classList.remove("selected");
+            }
+          });
+        }
 
         const thanksEl = document.getElementById(`thanks-${benchId}`);
         if (thanksEl) {
