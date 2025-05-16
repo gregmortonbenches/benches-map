@@ -1,46 +1,147 @@
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-<style>
-  body {
-    font-family: 'Inter', sans-serif;
-  }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benches Map</title>
 
-  .popup-content {
-    font-size: 14px;
-    line-height: 1.4;
-    max-width: 220px;
-  }
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 
-  .popup-content strong {
-    font-size: 15px;
-    font-weight: 600;
-  }
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
-  .rating-spinner {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 2px solid #ccc;
-    border-top: 2px solid #555;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    vertical-align: middle;
-    margin-left: 4px;
-  }
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+    }
 
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
+    #map {
+      height: calc(100% - 60px);
+      width: 100%;
+    }
 
-  .thanks-message {
-    color: green;
-    font-size: 13px;
-    margin-top: 4px;
-    animation: fadein 0.4s;
-  }
+    .header {
+      background-color: #121212;
+      color: white;
+      padding: 10px 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      height: 60px;
+    }
 
-  @keyframes fadein {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-</style>
+    .header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .search-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .search-container input {
+      padding: 6px 8px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: none;
+      min-width: 180px;
+    }
+
+    .search-container button {
+      padding: 6px 10px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #03A9F4;
+      color: white;
+    }
+
+    @media (max-width: 500px) {
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+        height: auto;
+      }
+
+      .search-container {
+        width: 100%;
+        margin-top: 5px;
+      }
+
+      .search-container input {
+        width: 100%;
+      }
+    }
+
+    .emoji-marker {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .popup-content {
+      background: #1E1E1E;
+      color: #fff;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .popup-content strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .popup-content .detail {
+      margin-top: 4px;
+    }
+
+    .popup-content label {
+      margin-right: 6px;
+    }
+
+    .popup-content select {
+      background: #333;
+      color: #fff;
+      border: none;
+      padding: 4px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Benches Map</h1>
+    <div class="search-container">
+      <input id="searchInput" type="text" placeholder="Search UK place..." />
+      <button onclick="searchLocation()">Search</button>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- Your script -->
+  <script src="benches.js"></script>
+</body>
+</html>
