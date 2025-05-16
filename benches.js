@@ -32,20 +32,6 @@ const benchIcon = L.divIcon({
 const markerCluster = L.markerClusterGroup();
 map.addLayer(markerCluster);
 
-// Helpers to track if user already rated a bench
-function hasRated(benchId) {
-  const rated = JSON.parse(localStorage.getItem("ratedBenches") || "[]");
-  return rated.includes(benchId);
-}
-
-function markAsRated(benchId) {
-  const rated = JSON.parse(localStorage.getItem("ratedBenches") || "[]");
-  if (!rated.includes(benchId)) {
-    rated.push(benchId);
-    localStorage.setItem("ratedBenches", JSON.stringify(rated));
-  }
-}
-
 // Load GeoJSON tiles
 for (let row = 0; row < 10; row++) {
   for (let col = 0; col < 10; col++) {
@@ -70,29 +56,18 @@ for (let row = 0; row < 10; row++) {
               <div class="popup">
                 <strong>${name}</strong>
                 ${extras}
-                <div id="rating-${benchId}" class="rating-text"><span class="spinner"></span> Loading rating...</div>
+                <div id="rating-${benchId}"><span class="spinner"></span></div>
                 <label for="rate-${benchId}">Rate:</label>
                 <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
                   <option value="">--</option>
                   ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
                 </select>
                 <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
-                <div id="already-rated-${benchId}" class="already-rated-message hidden">You've already rated this bench.</div>
               </div>
             `;
 
             marker.bindPopup(popupContent);
-            marker.on('popupopen', () => {
-              loadRating(benchId);
-
-              const rated = hasRated(benchId);
-              const select = document.getElementById(`rate-${benchId}`);
-              if (select) select.disabled = rated;
-
-              const alreadyMsg = document.getElementById(`already-rated-${benchId}`);
-              if (alreadyMsg) alreadyMsg.classList.toggle('hidden', !rated);
-            });
-
+            marker.on('popupopen', () => loadRating(benchId));
             return marker;
           }
         });
@@ -106,10 +81,12 @@ function loadRating(benchId) {
   const el = document.getElementById(`rating-${benchId}`);
   if (!el) return;
 
-  el.innerHTML = `<span class="spinner"></span> Loading rating...`;
+  el.innerHTML = `<span class="spinner"></span>`;
+  console.log("Loading rating for:", benchId); // Log to track rating load
 
   if (ratingCache[benchId]) {
     el.innerText = ratingCache[benchId];
+    console.log("Rating from cache:", ratingCache[benchId]); // Log cached value
     return;
   }
 
@@ -121,18 +98,23 @@ function loadRating(benchId) {
         const text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
         el.innerText = text;
         ratingCache[benchId] = text;
+        console.log("Loaded rating:", text); // Log loaded data
       } else {
         el.innerText = "No ratings yet.";
         ratingCache[benchId] = "No ratings yet.";
+        console.log("No ratings found."); // Log no ratings found
       }
     })
     .catch(() => {
       el.innerText = "Rating failed to load.";
+      console.error("Error loading rating."); // Log error if Firestore fails
     });
 }
 
 function submitRating(benchId, value) {
   const rating = parseInt(value);
+  console.log("Submitting rating:", benchId, rating); // Log to check submission
+
   if (!rating || rating < 1 || rating > 10) return;
 
   const ref = db.collection("benchRatings").doc(benchId);
@@ -143,12 +125,11 @@ function submitRating(benchId, value) {
         total: data.total + rating,
         count: data.count + 1
       }, { merge: true });
+      console.log("Updated rating:", doc.id, data.total + rating, data.count + 1); // Log to check update
     } else {
       ref.set({ total: rating, count: 1 });
+      console.log("Created new rating:", doc.id, rating); // Log for new rating
     }
-
-    markAsRated(benchId);
-    ratingCache[benchId] = null; // Invalidate cache
 
     const select = document.getElementById(`rate-${benchId}`);
     if (select) select.disabled = true;
@@ -156,13 +137,16 @@ function submitRating(benchId, value) {
     const thanksEl = document.getElementById(`thanks-${benchId}`);
     if (thanksEl) {
       thanksEl.classList.remove('hidden');
-      setTimeout(() => thanksEl.classList.add('hidden'), 2500);
+      console.log("Showing thanks message");
+      setTimeout(() => {
+        console.log("Hiding thanks message");
+        thanksEl.classList.add('hidden');
+      }, 2500);
     }
 
-    const alreadyMsg = document.getElementById(`already-rated-${benchId}`);
-    if (alreadyMsg) alreadyMsg.classList.remove('hidden');
-
     setTimeout(() => loadRating(benchId), 500);
+  }).catch(err => {
+    console.error("Error submitting rating:", err); // Log error if Firestore fails
   });
 }
 
