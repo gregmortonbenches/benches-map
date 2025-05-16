@@ -8,175 +8,100 @@
   <!-- Favicon fix -->
   <link rel="icon" href="data:,">
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  <!-- Inter Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css" />
 
   <style>
-    html, body {
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #222;
+      color: white;
       margin: 0;
       padding: 0;
-      height: 100%;
-      font-family: 'Inter', sans-serif;
-      background-color: #121212;
     }
 
     #map {
-      height: calc(100% - 60px);
-      width: 100%;
+      height: 100vh;
     }
 
-    .header {
-      background-color: #1e1e1e;
-      color: white;
-      padding: 10px 15px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      height: 60px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-      border-bottom: 1px solid #333;
-      border-radius: 0 0 12px 12px;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 18px;
-    }
-
-    .search-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .search-container input {
-      padding: 6px;
-      font-size: 14px;
-      border-radius: 6px;
-      border: none;
-      background-color: #2a2a2a;
-      color: #eee;
-    }
-
-    .search-container button {
-      padding: 6px 10px;
-      font-size: 14px;
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      background-color: #2196F3;
+    .popup {
+      font-size: 16px;
       color: white;
     }
 
     .emoji-marker {
-      font-size: 20px;
-      line-height: 1;
+      font-size: 24px;
     }
 
-    .popup {
-      color: white;
-      font-size: 14px;
-      background-color: #1e1e1e;
-    }
-
-    .popup select {
-      margin-top: 4px;
-      background: #2a2a2a;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 2px 6px;
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border: 2px solid #fff;
-      border-top: 2px solid #444;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-      margin-right: 4px;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .fade-message {
-      margin-top: 4px;
-      color: #4caf50;
-      font-size: 13px;
-      opacity: 1;
-      transition: opacity 0.3s ease;
-    }
-
-    .fade-message.hidden {
-      opacity: 0;
+    .star-rating {
+      display: flex;
+      justify-content: space-between;
+      width: 120px;
+      margin-bottom: 10px;
     }
 
     .star-rating input {
       display: none;
     }
 
-    .star-rating label {
-      font-size: 18px;
+    .star-rating input + label {
+      font-size: 20px;
+      color: gray;
       cursor: pointer;
-      color: #bbb;
     }
 
-    .star-rating input:checked ~ label {
+    .star-rating input:checked + label {
       color: gold;
     }
 
-    .star-rating label:hover,
-    .star-rating label:hover ~ label {
-      color: gold;
+    .spinner {
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #3498db;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      animation: spin 1s linear infinite;
     }
 
-    @media (max-width: 500px) {
-      .header {
-        flex-direction: column;
-        align-items: flex-start;
-        height: auto;
-      }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
 
-      .search-container {
-        width: 100%;
-        margin-top: 5px;
-      }
+    .hidden {
+      display: none;
+    }
 
-      .search-container input {
-        width: 100%;
-      }
+    .fade-message {
+      color: green;
+      font-weight: bold;
+      opacity: 0;
+      transition: opacity 1s ease-out;
+    }
+
+    .fade-message.show {
+      opacity: 1;
     }
   </style>
+
 </head>
 <body>
 
-  <div class="header">
-    <h1>Benches Map</h1>
-    <div class="search-container">
-      <input id="searchInput" type="text" placeholder="Search UK place..." />
-      <button onclick="searchLocation()">Search</button>
-    </div>
+  <!-- Search Bar -->
+  <div style="position: absolute; z-index: 1000; top: 10px; left: 50%; transform: translateX(-50%);">
+    <input id="searchInput" type="text" placeholder="Search for a location" oninput="searchLocation()" style="padding: 10px; font-size: 16px; width: 300px; border-radius: 5px;"/>
   </div>
 
+  <!-- Map Container -->
   <div id="map"></div>
-
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -301,7 +226,11 @@
             viewCount: data.viewCount + 1,
             ambienceTotal: data.ambienceTotal + ambienceRating,
             ambienceCount: data.ambienceCount + 1
-          }, { merge: true });
+          }, { merge: true }).then(() => {
+            document.querySelector(`#thanks-${benchId}`).classList.add("show");
+            setTimeout(() => document.querySelector(`#thanks-${benchId}`).classList.remove("show"), 2000);
+            loadRating(benchId);
+          });
         } else {
           ref.set({
             comfortTotal: comfortRating,
@@ -310,77 +239,38 @@
             viewCount: 1,
             ambienceTotal: ambienceRating,
             ambienceCount: 1
+          }).then(() => {
+            document.querySelector(`#thanks-${benchId}`).classList.add("show");
+            setTimeout(() => document.querySelector(`#thanks-${benchId}`).classList.remove("show"), 2000);
+            loadRating(benchId);
           });
         }
-
-        document.querySelectorAll(`#comfort-${benchId} input, #view-${benchId} input, #ambience-${benchId} input`)
-          .forEach(input => input.disabled = true);
-
-        const thanksEl = document.getElementById(`thanks-${benchId}`);
-        if (thanksEl) {
-          thanksEl.classList.remove('hidden');
-          setTimeout(() => thanksEl.classList.add('hidden'), 2500);
-        }
-
-        setTimeout(() => loadRating(benchId), 500);
       });
     }
 
     function loadRating(benchId) {
       const safeId = sanitizeId(benchId);
-      const el = document.getElementById(`rating-${benchId}`);
-      if (!el) return;
+      const ref = db.collection("benchRatings").doc(safeId);
 
-      el.innerHTML = `<span class="spinner"></span>`;
+      ref.get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          const comfortAvg = (data.comfortTotal / data.comfortCount).toFixed(1);
+          const viewAvg = (data.viewTotal / data.viewCount).toFixed(1);
+          const ambienceAvg = (data.ambienceTotal / data.ambienceCount).toFixed(1);
+          const overallAvg = ((parseFloat(comfortAvg) + parseFloat(viewAvg) + parseFloat(ambienceAvg)) / 3).toFixed(1);
 
-      if (ratingCache[safeId]) {
-        el.innerText = ratingCache[safeId];
-        return;
-      }
-
-      db.collection("benchRatings").doc(safeId).get()
-        .then(doc => {
-          if (doc.exists) {
-            const data = doc.data();
-            
-            // Average ratings for comfort, view, and ambience
-            const comfortAvg = data.comfortTotal / data.comfortCount;
-            const viewAvg = data.viewTotal / data.viewCount;
-            const ambienceAvg = data.ambienceTotal / data.ambienceCount;
-
-            // Calculate overall average
-            const overallAvg = (comfortAvg + viewAvg + ambienceAvg) / 3;
-
-            const text = `Average Ratings:
-                          Comfort: ${comfortAvg.toFixed(1)} (${data.comfortCount} ratings)
-                          View: ${viewAvg.toFixed(1)} (${data.viewCount} ratings)
-                          Ambience: ${ambienceAvg.toFixed(1)} (${data.ambienceCount} ratings)
-                          Overall: ${overallAvg.toFixed(1)}`;
-
-            el.innerText = text;
-            ratingCache[safeId] = text;
-          } else {
-            el.innerText = "No ratings yet.";
-            ratingCache[safeId] = "No ratings yet.";
-          }
-        })
-        .catch(err => {
-          el.innerText = "Rating failed to load.";
-          console.error("Error loading rating:", err);
-        });
+          document.querySelector(`#rating-${benchId}`).innerHTML = `
+            Comfort: ${comfortAvg}★ | View: ${viewAvg}★ | Ambience: ${ambienceAvg}★ | Overall: ${overallAvg}★
+          `;
+        }
+      });
     }
 
-    function sanitizeId(benchId) {
-      return benchId.replace(/\W+/g, '_');
-    }
-
-    function searchLocation() {
-      const query = document.getElementById('searchInput').value;
-      if (query) {
-        const encodedQuery = encodeURIComponent(query);
-        window.open(`https://www.google.com/maps/search/?q=${encodedQuery}`, '_blank');
-      }
+    function sanitizeId(id) {
+      return id.replace(/\./g, "_");
     }
   </script>
+
 </body>
 </html>
