@@ -55,10 +55,20 @@ for (let row = 0; row < 10; row++) {
                 <strong>${name}</strong>
                 ${extras}
                 <div id="rating-${benchId}"><span class="spinner"></span></div>
-                <label for="rate-${benchId}">Rate:</label>
-                <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
+                <label for="rate-${benchId}-comfort">Rate Comfort:</label>
+                <select id="rate-${benchId}-comfort" onchange="submitRating('${benchId}', 'comfort', this.value)">
                   <option value="">--</option>
-                  ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
+                  ${[...Array(5)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
+                </select>
+                <label for="rate-${benchId}-view">Rate View:</label>
+                <select id="rate-${benchId}-view" onchange="submitRating('${benchId}', 'view', this.value)">
+                  <option value="">--</option>
+                  ${[...Array(5)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
+                </select>
+                <label for="rate-${benchId}-ambience">Rate Ambience:</label>
+                <select id="rate-${benchId}-ambience" onchange="submitRating('${benchId}', 'ambience', this.value)">
+                  <option value="">--</option>
+                  ${[...Array(5)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
                 </select>
                 <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
               </div>
@@ -96,9 +106,25 @@ function loadRating(benchId) {
     .then(doc => {
       if (doc.exists) {
         const data = doc.data();
-        const avg = data.total / data.count;
-        const text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
-        el.innerText = text;
+
+        // Get the individual metric averages
+        const comfortAvg = (data.comfortTotal || 0) / (data.comfortCount || 1);
+        const viewAvg = (data.viewTotal || 0) / (data.viewCount || 1);
+        const ambienceAvg = (data.ambienceTotal || 0) / (data.ambienceCount || 1);
+
+        // Calculate overall average
+        const overallAvg = (data.comfortTotal || 0) + (data.viewTotal || 0) + (data.ambienceTotal || 0);
+        const overallCount = (data.comfortCount || 0) + (data.viewCount || 0) + (data.ambienceCount || 0);
+        const overallRating = overallAvg / (overallCount || 1);
+
+        const text = `
+          <strong>Comfort:</strong> ${comfortAvg.toFixed(1)} stars<br>
+          <strong>View:</strong> ${viewAvg.toFixed(1)} stars<br>
+          <strong>Ambience:</strong> ${ambienceAvg.toFixed(1)} stars<br>
+          <strong>Overall:</strong> ${overallRating.toFixed(1)} stars
+        `;
+
+        el.innerHTML = text;
         ratingCache[safeId] = text;
       } else {
         el.innerText = "No ratings yet.";
@@ -111,36 +137,62 @@ function loadRating(benchId) {
     });
 }
 
-function submitRating(benchId, value) {
+function submitRating(benchId, metric, value) {
   const safeId = sanitizeId(benchId);
   const rating = parseInt(value);
-  if (!rating || rating < 1 || rating > 10) return;
+  if (!rating || rating < 1 || rating > 5) return;
 
   const ref = db.collection("benchRatings").doc(safeId);
-  console.log("Submitting rating:", benchId, rating);
+  console.log("Submitting rating:", benchId, metric, rating);
 
   ref.get().then(doc => {
     if (doc.exists) {
       const data = doc.data();
+      // Update the specific metric total and count
+      const newMetricTotal = (data[`${metric}Total`] || 0) + rating;
+      const newMetricCount = (data[`${metric}Count`] || 0) + 1;
+
       ref.set({
-        total: data.total + rating,
-        count: data.count + 1
-      }, { merge: true });
+        [`${metric}Total`]: newMetricTotal,
+        [`${metric}Count`]: newMetricCount
+      }, { merge: true }).then(() => {
+        // Calculate overall average (comfort + view + ambience) / 3
+        const overallTotal = (data.comfortTotal || 0) + (data.viewTotal || 0) + (data.ambienceTotal || 0);
+        const overallCount = (data.comfortCount || 0) + (data.viewCount || 0) + (data.ambienceCount || 0);
+        const overallAvg = overallTotal / (overallCount || 1);
+
+        // Update Firestore with overall average
+        ref.set({ overallAvg: overallAvg }, { merge: true });
+
+        // Update the UI after submission
+        updatePopup(safeId);
+      });
     } else {
-      ref.set({ total: rating, count: 1 });
+      // First time rating, set initial values
+      const initialData = {
+        [`${metric}Total`]: rating,
+        [`${metric}Count`]: 1,
+        overallAvg: rating
+      };
+      ref.set(initialData).then(() => {
+        updatePopup(safeId);
+      });
     }
-
-    const select = document.getElementById(`rate-${benchId}`);
-    if (select) select.disabled = true;
-
-    const thanksEl = document.getElementById(`thanks-${benchId}`);
-    if (thanksEl) {
-      thanksEl.classList.remove('hidden');
-      setTimeout(() => thanksEl.classList.add('hidden'), 2500);
-    }
-
-    setTimeout(() => loadRating(benchId), 500);
   });
+
+  // Disable the select and show thanks message
+  const select = document.getElementById(`rate-${benchId}-${metric}`);
+  if (select) select.disabled = true;
+
+  const thanksEl = document.getElementById(`thanks-${benchId}`);
+  if (thanksEl) {
+    thanksEl.classList.remove('hidden');
+    setTimeout(() => thanksEl.classList.add('hidden'), 2500);
+  }
+}
+
+function updatePopup(safeId) {
+  setTimeout(() => loadRating(safeId), 500);
 }
 
 function searchLocation() {
@@ -155,7 +207,4 @@ function searchLocation() {
         return;
       }
       const { lat, lon } = data[0];
-      map.setView([parseFloat(lat), parseFloat(lon)], 15);
-    })
-    .catch(err => console.error('Geocoding error:', err));
-}
+      map.setView([parseFloat(lat), parseFloat
