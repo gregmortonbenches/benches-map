@@ -55,21 +55,37 @@ for (let row = 0; row < 10; row++) {
                 <strong>${name}</strong>
                 ${extras}
                 <div id="rating-${benchId}"><span class="spinner"></span></div>
-                <label for="rate-${benchId}-comfort">Rate Comfort:</label>
-                <select id="rate-${benchId}-comfort" onchange="submitRating('${benchId}', 'comfort', this.value)">
-                  <option value="">--</option>
-                  ${[...Array(5)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-                </select>
-                <label for="rate-${benchId}-view">Rate View:</label>
-                <select id="rate-${benchId}-view" onchange="submitRating('${benchId}', 'view', this.value)">
-                  <option value="">--</option>
-                  ${[...Array(5)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-                </select>
-                <label for="rate-${benchId}-ambience">Rate Ambience:</label>
-                <select id="rate-${benchId}-ambience" onchange="submitRating('${benchId}', 'ambience', this.value)">
-                  <option value="">--</option>
-                  ${[...Array(5)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-                </select>
+                
+                <!-- Comfort Rating -->
+                <label for="comfort-${benchId}">Comfort:</label>
+                <div id="comfort-${benchId}" class="star-rating">
+                  <input type="radio" name="comfort-${benchId}" value="1" /> ★
+                  <input type="radio" name="comfort-${benchId}" value="2" /> ★★
+                  <input type="radio" name="comfort-${benchId}" value="3" /> ★★★
+                  <input type="radio" name="comfort-${benchId}" value="4" /> ★★★★
+                  <input type="radio" name="comfort-${benchId}" value="5" /> ★★★★★
+                </div>
+                
+                <!-- View Rating -->
+                <label for="view-${benchId}">View:</label>
+                <div id="view-${benchId}" class="star-rating">
+                  <input type="radio" name="view-${benchId}" value="1" /> ★
+                  <input type="radio" name="view-${benchId}" value="2" /> ★★
+                  <input type="radio" name="view-${benchId}" value="3" /> ★★★
+                  <input type="radio" name="view-${benchId}" value="4" /> ★★★★
+                  <input type="radio" name="view-${benchId}" value="5" /> ★★★★★
+                </div>
+                
+                <!-- Ambience Rating -->
+                <label for="ambience-${benchId}">Ambience:</label>
+                <div id="ambience-${benchId}" class="star-rating">
+                  <input type="radio" name="ambience-${benchId}" value="1" /> ★
+                  <input type="radio" name="ambience-${benchId}" value="2" /> ★★
+                  <input type="radio" name="ambience-${benchId}" value="3" /> ★★★
+                  <input type="radio" name="ambience-${benchId}" value="4" /> ★★★★
+                  <input type="radio" name="ambience-${benchId}" value="5" /> ★★★★★
+                </div>
+
                 <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
               </div>
             `;
@@ -80,13 +96,53 @@ for (let row = 0; row < 10; row++) {
           }
         });
         markerCluster.addLayer(layer);
-      })
-      .catch(err => console.warn(`Failed to load ${url}:`, err));
+      });
   }
 }
 
-function sanitizeId(id) {
-  return id.replace(/\//g, '_');
+function submitRating(benchId) {
+  const comfortRating = parseInt(document.querySelector(`input[name="comfort-${benchId}"]:checked`)?.value);
+  const viewRating = parseInt(document.querySelector(`input[name="view-${benchId}"]:checked`)?.value);
+  const ambienceRating = parseInt(document.querySelector(`input[name="ambience-${benchId}"]:checked`)?.value);
+
+  if (!comfortRating || !viewRating || !ambienceRating) return;
+
+  const safeId = sanitizeId(benchId);
+  const ref = db.collection("benchRatings").doc(safeId);
+
+  ref.get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      ref.set({
+        comfortTotal: data.comfortTotal + comfortRating,
+        comfortCount: data.comfortCount + 1,
+        viewTotal: data.viewTotal + viewRating,
+        viewCount: data.viewCount + 1,
+        ambienceTotal: data.ambienceTotal + ambienceRating,
+        ambienceCount: data.ambienceCount + 1
+      }, { merge: true });
+    } else {
+      ref.set({
+        comfortTotal: comfortRating,
+        comfortCount: 1,
+        viewTotal: viewRating,
+        viewCount: 1,
+        ambienceTotal: ambienceRating,
+        ambienceCount: 1
+      });
+    }
+
+    document.querySelectorAll(`#comfort-${benchId} input, #view-${benchId} input, #ambience-${benchId} input`)
+      .forEach(input => input.disabled = true);
+
+    const thanksEl = document.getElementById(`thanks-${benchId}`);
+    if (thanksEl) {
+      thanksEl.classList.remove('hidden');
+      setTimeout(() => thanksEl.classList.add('hidden'), 2500);
+    }
+
+    setTimeout(() => loadRating(benchId), 500);
+  });
 }
 
 function loadRating(benchId) {
@@ -95,7 +151,6 @@ function loadRating(benchId) {
   if (!el) return;
 
   el.innerHTML = `<span class="spinner"></span>`;
-  console.log("Loading rating for:", benchId);
 
   if (ratingCache[safeId]) {
     el.innerText = ratingCache[safeId];
@@ -106,25 +161,22 @@ function loadRating(benchId) {
     .then(doc => {
       if (doc.exists) {
         const data = doc.data();
-
-        // Get the individual metric averages
-        const comfortAvg = (data.comfortTotal || 0) / (data.comfortCount || 1);
-        const viewAvg = (data.viewTotal || 0) / (data.viewCount || 1);
-        const ambienceAvg = (data.ambienceTotal || 0) / (data.ambienceCount || 1);
+        
+        // Average ratings for comfort, view, and ambience
+        const comfortAvg = data.comfortTotal / data.comfortCount;
+        const viewAvg = data.viewTotal / data.viewCount;
+        const ambienceAvg = data.ambienceTotal / data.ambienceCount;
 
         // Calculate overall average
-        const overallAvg = (data.comfortTotal || 0) + (data.viewTotal || 0) + (data.ambienceTotal || 0);
-        const overallCount = (data.comfortCount || 0) + (data.viewCount || 0) + (data.ambienceCount || 0);
-        const overallRating = overallAvg / (overallCount || 1);
+        const overallAvg = (comfortAvg + viewAvg + ambienceAvg) / 3;
 
-        const text = `
-          <strong>Comfort:</strong> ${comfortAvg.toFixed(1)} stars<br>
-          <strong>View:</strong> ${viewAvg.toFixed(1)} stars<br>
-          <strong>Ambience:</strong> ${ambienceAvg.toFixed(1)} stars<br>
-          <strong>Overall:</strong> ${overallRating.toFixed(1)} stars
-        `;
+        const text = `Average Ratings:
+                      Comfort: ${comfortAvg.toFixed(1)} (${data.comfortCount} ratings)
+                      View: ${viewAvg.toFixed(1)} (${data.viewCount} ratings)
+                      Ambience: ${ambienceAvg.toFixed(1)} (${data.ambienceCount} ratings)
+                      Overall: ${overallAvg.toFixed(1)}`;
 
-        el.innerHTML = text;
+        el.innerText = text;
         ratingCache[safeId] = text;
       } else {
         el.innerText = "No ratings yet.";
@@ -137,79 +189,14 @@ function loadRating(benchId) {
     });
 }
 
-function submitRating(benchId, metric, value) {
-  const safeId = sanitizeId(benchId);
-  const rating = parseInt(value);
-  if (!rating || rating < 1 || rating > 5) return;
-
-  const ref = db.collection("benchRatings").doc(safeId);
-  console.log("Submitting rating:", benchId, metric, rating);
-
-  ref.get().then(doc => {
-    if (doc.exists) {
-      const data = doc.data();
-      // Update the specific metric total and count
-      const newMetricTotal = (data[`${metric}Total`] || 0) + rating;
-      const newMetricCount = (data[`${metric}Count`] || 0) + 1;
-
-      ref.set({
-        [`${metric}Total`]: newMetricTotal,
-        [`${metric}Count`]: newMetricCount
-      }, { merge: true }).then(() => {
-        // Calculate overall average (comfort + view + ambience) / 3
-        const overallTotal = (data.comfortTotal || 0) + (data.viewTotal || 0) + (data.ambienceTotal || 0);
-        const overallCount = (data.comfortCount || 0) + (data.viewCount || 0) + (data.ambienceCount || 0);
-        const overallAvg = overallTotal / (overallCount || 1);
-
-        // Update Firestore with overall average
-        ref.set({ overallAvg: overallAvg }, { merge: true });
-
-        // Update the UI after submission
-        updatePopup(safeId);
-      });
-    } else {
-      // First time rating, set initial values
-      const initialData = {
-        [`${metric}Total`]: rating,
-        [`${metric}Count`]: 1,
-        overallAvg: rating
-      };
-      ref.set(initialData).then(() => {
-        updatePopup(safeId);
-      });
-    }
-  });
-
-  // Disable the select and show thanks message
-  const select = document.getElementById(`rate-${benchId}-${metric}`);
-  if (select) select.disabled = true;
-
-  const thanksEl = document.getElementById(`thanks-${benchId}`);
-  if (thanksEl) {
-    thanksEl.classList.remove('hidden');
-    setTimeout(() => thanksEl.classList.add('hidden'), 2500);
-  }
-}
-
-function updatePopup(safeId) {
-  setTimeout(() => loadRating(safeId), 500);
+function sanitizeId(benchId) {
+  return benchId.replace(/\W+/g, '_');
 }
 
 function searchLocation() {
   const query = document.getElementById('searchInput').value;
-  if (!query) return;
-
-  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=gb`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.length === 0) {
-        alert("Place not found.");
-        return;
-      }
-      const { lat, lon } = data[0];
-      map.setView([parseFloat(lat), parseFloat(lon)], 12);
-    })
-    .catch(err => {
-      console.error("Error fetching location:", err);
-    });
+  if (query) {
+    const encodedQuery = encodeURIComponent(query);
+    window.open(`https://www.google.com/maps/search/?q=${encodedQuery}`, '_blank');
+  }
 }
