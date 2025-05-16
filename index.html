@@ -2,23 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Benches Map</title>
-
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
+  <!-- Optional: Spinner and popup styling -->
   <style>
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
-      font-family: 'Inter', sans-serif;
     }
 
     #map {
@@ -27,7 +24,7 @@
     }
 
     .header {
-      background-color: #121212;
+      background-color: #333;
       color: white;
       padding: 10px 15px;
       display: flex;
@@ -40,7 +37,6 @@
     .header h1 {
       margin: 0;
       font-size: 18px;
-      font-weight: 600;
     }
 
     .search-container {
@@ -50,7 +46,7 @@
     }
 
     .search-container input {
-      padding: 6px 8px;
+      padding: 5px;
       font-size: 14px;
       border-radius: 4px;
       border: none;
@@ -63,7 +59,7 @@
       cursor: pointer;
       border: none;
       border-radius: 4px;
-      background-color: #03A9F4;
+      background-color: #2196F3;
       color: white;
     }
 
@@ -90,34 +86,36 @@
     }
 
     .popup-content {
-      background: #1E1E1E;
-      color: #fff;
-      border-radius: 8px;
-      padding: 8px;
+      font-family: 'Segoe UI', sans-serif;
       font-size: 14px;
       line-height: 1.4;
     }
 
-    .popup-content strong {
-      display: block;
-      font-size: 15px;
-      margin-bottom: 6px;
+    .rating-block {
+      margin: 8px 0;
+      min-height: 24px;
     }
 
-    .popup-content .detail {
-      margin-top: 4px;
+    .thanks-message {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #4CAF50;
+      transition: opacity 0.5s ease;
     }
 
-    .popup-content label {
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #ccc;
+      border-top: 2px solid #2196F3;
+      border-radius: 50%;
+      display: inline-block;
+      animation: spin 0.8s linear infinite;
       margin-right: 6px;
     }
 
-    .popup-content select {
-      background: #333;
-      color: #fff;
-      border: none;
-      padding: 4px;
-      border-radius: 4px;
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
@@ -137,7 +135,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-  <!-- Leaflet JS -->
+  <!-- Leaflet and MarkerCluster -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
