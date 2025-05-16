@@ -1,4 +1,4 @@
-// Initialize Firebase
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
   authDomain: "bench-rating.firebaseapp.com",
@@ -9,11 +9,9 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-
-// Cache to avoid duplicate Firebase reads
 const ratingCache = {};
 
-// Initialize map
+// Map setup
 const map = L.map('map', {
   maxBounds: [[48.5, -11], [61.5, 4]],
   maxBoundsViscosity: 1.0
@@ -24,7 +22,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Custom bench icon
+// Icon
 const benchIcon = L.divIcon({
   className: 'emoji-marker',
   html: '🪑',
@@ -32,38 +30,44 @@ const benchIcon = L.divIcon({
   iconAnchor: [12, 24]
 });
 
-// Marker clustering
 const markerCluster = L.markerClusterGroup();
 map.addLayer(markerCluster);
 
-// Load tile chunks
+// Load benches
 for (let row = 0; row < 10; row++) {
   for (let col = 0; col < 10; col++) {
     const url = `data/tile_${row}_${col}.geojson`;
     fetch(url)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-        return res.json();
-      })
+      .then(res => res.ok ? res.json() : Promise.reject(res.status))
       .then(data => {
         const layer = L.geoJSON(data, {
           pointToLayer: (feature, latlng) => {
-            const benchId = feature.properties?.id ||
-              `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}_${Math.floor(Math.random() * 1000)}`;
-            const name = feature.properties?.name || "Unnamed Bench";
+            const props = feature.properties || {};
+            const benchId = props["@id"] || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}`;
+            const name = "Bench";
+
+            const extraDetails = ['backrest', 'seats', 'material', 'colour']
+              .filter(key => props[key])
+              .map(key => `<div class="detail"><strong>${key}:</strong> ${props[key]}</div>`)
+              .join('');
+
+            const popupHTML = `
+              <div class="popup-content">
+                <strong>${name}</strong>
+                <div id="rating-${benchId}">Loading rating...</div>
+                ${extraDetails}
+                <div class="detail">
+                  <label for="rate-${benchId}">Rate:</label>
+                  <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
+                    <option value="">--</option>
+                    ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+            `;
 
             const marker = L.marker(latlng, { icon: benchIcon });
-            marker.bindPopup(`
-              <div>
-                <strong>${name}</strong><br>
-                <div id="rating-${benchId}">Loading rating...</div>
-                <label for="rate-${benchId}">Rate:</label>
-                <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
-                  <option value="">--</option>
-                  ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-                </select>
-              </div>
-            `);
+            marker.bindPopup(popupHTML);
             marker.on('popupopen', () => loadRating(benchId));
             return marker;
           }
@@ -74,7 +78,7 @@ for (let row = 0; row < 10; row++) {
   }
 }
 
-// Load rating with caching
+// Load rating
 function loadRating(benchId) {
   const el = document.getElementById(`rating-${benchId}`);
   if (!el) return;
@@ -100,7 +104,7 @@ function loadRating(benchId) {
   });
 }
 
-// Submit a user rating
+// Submit rating
 function submitRating(benchId, value) {
   const rating = parseInt(value);
   if (!rating || rating < 1 || rating > 10) return;
@@ -117,18 +121,14 @@ function submitRating(benchId, value) {
       ref.set({ total: rating, count: 1 });
     }
 
-    // Optional: disable dropdown and say thank you
     const select = document.getElementById(`rate-${benchId}`);
-    if (select) {
-      select.disabled = true;
-    }
+    if (select) select.disabled = true;
 
-    // Force refresh the rating display after submission
     setTimeout(() => loadRating(benchId), 500);
   });
 }
 
-// Search using Nominatim
+// Search
 function searchLocation() {
   const query = document.getElementById('searchInput').value;
   if (!query) return;
