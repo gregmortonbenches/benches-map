@@ -2,20 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Benches Map</title>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- MarkerCluster CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <!-- London Underground Live style font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
 
-  <!-- Optional: Spinner and popup styling -->
   <style>
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
+      font-family: 'Inter', sans-serif;
+      background-color: #121212;
+      color: #eee;
     }
 
     #map {
@@ -24,7 +29,7 @@
     }
 
     .header {
-      background-color: #333;
+      background-color: #1e1e1e;
       color: white;
       padding: 10px 15px;
       display: flex;
@@ -85,37 +90,35 @@
       line-height: 1;
     }
 
-    .popup-content {
-      font-family: 'Segoe UI', sans-serif;
+    .popup {
       font-size: 14px;
       line-height: 1.4;
-    }
-
-    .rating-block {
-      margin: 8px 0;
-      min-height: 24px;
-    }
-
-    .thanks-message {
-      margin-top: 6px;
-      font-size: 13px;
-      color: #4CAF50;
-      transition: opacity 0.5s ease;
     }
 
     .spinner {
       width: 14px;
       height: 14px;
       border: 2px solid #ccc;
-      border-top: 2px solid #2196F3;
+      border-top: 2px solid #fff;
       border-radius: 50%;
-      display: inline-block;
       animation: spin 0.8s linear infinite;
-      margin-right: 6px;
+      display: inline-block;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+
+    .fade-message {
+      margin-top: 5px;
+      color: #8f8;
+      font-size: 13px;
+      opacity: 1;
+      transition: opacity 0.4s ease-in-out;
+    }
+
+    .fade-message.hidden {
+      opacity: 0;
     }
   </style>
 </head>
@@ -135,11 +138,11 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-  <!-- Leaflet and MarkerCluster -->
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- Your script -->
+  <!-- App JS -->
   <script src="benches.js"></script>
 </body>
 </html>
