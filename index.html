@@ -121,19 +121,23 @@
       opacity: 0;
     }
 
-    .rating-stars {
-      display: flex;
-      gap: 4px;
-      cursor: pointer;
+    .star-rating input {
+      display: none;
     }
 
-    .rating-stars span {
+    .star-rating label {
       font-size: 18px;
-      color: #ddd;
+      cursor: pointer;
+      color: #bbb;
     }
 
-    .rating-stars span.selected {
-      color: #ffd700;
+    .star-rating input:checked ~ label {
+      color: gold;
+    }
+
+    .star-rating label:hover,
+    .star-rating label:hover ~ label {
+      color: gold;
     }
 
     @media (max-width: 500px) {
@@ -232,20 +236,38 @@
                     <strong>${name}</strong>
                     ${extras}
                     <div id="rating-${benchId}"><span class="spinner"></span></div>
+                    
+                    <!-- Comfort Rating -->
                     <label for="comfort-${benchId}">Comfort:</label>
-                    <div id="comfort-${benchId}" class="rating-stars" data-metric="comfort">
-                      ${[1, 2, 3, 4, 5].map(i => `<span onclick="rate('${benchId}', 'comfort', ${i})">★</span>`).join('')}
+                    <div id="comfort-${benchId}" class="star-rating">
+                      <input type="radio" name="comfort-${benchId}" value="1" /> ★
+                      <input type="radio" name="comfort-${benchId}" value="2" /> ★★
+                      <input type="radio" name="comfort-${benchId}" value="3" /> ★★★
+                      <input type="radio" name="comfort-${benchId}" value="4" /> ★★★★
+                      <input type="radio" name="comfort-${benchId}" value="5" /> ★★★★★
                     </div>
+                    
+                    <!-- View Rating -->
                     <label for="view-${benchId}">View:</label>
-                    <div id="view-${benchId}" class="rating-stars" data-metric="view">
-                      ${[1, 2, 3, 4, 5].map(i => `<span onclick="rate('${benchId}', 'view', ${i})">★</span>`).join('')}
+                    <div id="view-${benchId}" class="star-rating">
+                      <input type="radio" name="view-${benchId}" value="1" /> ★
+                      <input type="radio" name="view-${benchId}" value="2" /> ★★
+                      <input type="radio" name="view-${benchId}" value="3" /> ★★★
+                      <input type="radio" name="view-${benchId}" value="4" /> ★★★★
+                      <input type="radio" name="view-${benchId}" value="5" /> ★★★★★
                     </div>
+                    
+                    <!-- Ambience Rating -->
                     <label for="ambience-${benchId}">Ambience:</label>
-                    <div id="ambience-${benchId}" class="rating-stars" data-metric="ambience">
-                      ${[1, 2, 3, 4, 5].map(i => `<span onclick="rate('${benchId}', 'ambience', ${i})">★</span>`).join('')}
+                    <div id="ambience-${benchId}" class="star-rating">
+                      <input type="radio" name="ambience-${benchId}" value="1" /> ★
+                      <input type="radio" name="ambience-${benchId}" value="2" /> ★★
+                      <input type="radio" name="ambience-${benchId}" value="3" /> ★★★
+                      <input type="radio" name="ambience-${benchId}" value="4" /> ★★★★
+                      <input type="radio" name="ambience-${benchId}" value="5" /> ★★★★★
                     </div>
+
                     <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
-                    <div id="overall-rating-${benchId}">Overall Average: Loading...</div>
                   </div>
                 `;
 
@@ -255,74 +277,44 @@
               }
             });
             markerCluster.addLayer(layer);
-          })
-          .catch(err => console.warn(`Failed to load ${url}:`, err));
+          });
       }
     }
 
-    function sanitizeId(id) {
-      return id.replace(/\//g, '_');
-    }
+    function submitRating(benchId) {
+      const comfortRating = parseInt(document.querySelector(`input[name="comfort-${benchId}"]:checked`)?.value);
+      const viewRating = parseInt(document.querySelector(`input[name="view-${benchId}"]:checked`)?.value);
+      const ambienceRating = parseInt(document.querySelector(`input[name="ambience-${benchId}"]:checked`)?.value);
 
-    function loadRating(benchId) {
-      const safeId = sanitizeId(benchId);
-      const el = document.getElementById(`rating-${benchId}`);
-      const overallEl = document.getElementById(`overall-rating-${benchId}`);
-      if (!el || !overallEl) return;
+      if (!comfortRating || !viewRating || !ambienceRating) return;
 
-      el.innerHTML = `<span class="spinner"></span>`;
-      overallEl.innerText = "Overall Average: Loading...";
-
-      if (ratingCache[safeId]) {
-        el.innerText = ratingCache[safeId];
-        return;
-      }
-
-      db.collection("benchRatings").doc(safeId).get()
-        .then(doc => {
-          if (doc.exists) {
-            const data = doc.data();
-            const avg = (data.comfort + data.view + data.ambience) / 3;
-            const text = `Comfort: ${data.comfort}, View: ${data.view}, Ambience: ${data.ambience}. Overall Average: ${avg.toFixed(1)}`;
-            el.innerText = text;
-            overallEl.innerText = `Overall Average: ${avg.toFixed(1)}`;
-            ratingCache[safeId] = text;
-          } else {
-            el.innerText = "No ratings yet.";
-            overallEl.innerText = "No ratings yet.";
-            ratingCache[safeId] = "No ratings yet.";
-          }
-        })
-        .catch(err => {
-          el.innerText = "Rating failed to load.";
-          overallEl.innerText = "Rating failed to load.";
-          console.error("Error loading rating:", err);
-        });
-    }
-
-    function rate(benchId, metric, rating) {
       const safeId = sanitizeId(benchId);
       const ref = db.collection("benchRatings").doc(safeId);
-      console.log(`Rating ${metric}: ${rating} for ${benchId}`);
 
       ref.get().then(doc => {
-        let newData = doc.exists ? doc.data() : { comfort: 0, view: 0, ambience: 0, count: 0 };
-        newData[metric] = rating;
-        newData.count += 1;
-
-        ref.set(newData, { merge: true });
-
-        // Update the UI
-        const metricDiv = document.getElementById(`${metric}-${benchId}`);
-        if (metricDiv) {
-          metricDiv.querySelectorAll("span").forEach((span, index) => {
-            if (index < rating) {
-              span.classList.add("selected");
-            } else {
-              span.classList.remove("selected");
-            }
+        if (doc.exists) {
+          const data = doc.data();
+          ref.set({
+            comfortTotal: data.comfortTotal + comfortRating,
+            comfortCount: data.comfortCount + 1,
+            viewTotal: data.viewTotal + viewRating,
+            viewCount: data.viewCount + 1,
+            ambienceTotal: data.ambienceTotal + ambienceRating,
+            ambienceCount: data.ambienceCount + 1
+          }, { merge: true });
+        } else {
+          ref.set({
+            comfortTotal: comfortRating,
+            comfortCount: 1,
+            viewTotal: viewRating,
+            viewCount: 1,
+            ambienceTotal: ambienceRating,
+            ambienceCount: 1
           });
         }
+
+        document.querySelectorAll(`#comfort-${benchId} input, #view-${benchId} input, #ambience-${benchId} input`)
+          .forEach(input => input.disabled = true);
 
         const thanksEl = document.getElementById(`thanks-${benchId}`);
         if (thanksEl) {
@@ -334,21 +326,60 @@
       });
     }
 
+    function loadRating(benchId) {
+      const safeId = sanitizeId(benchId);
+      const el = document.getElementById(`rating-${benchId}`);
+      if (!el) return;
+
+      el.innerHTML = `<span class="spinner"></span>`;
+
+      if (ratingCache[safeId]) {
+        el.innerText = ratingCache[safeId];
+        return;
+      }
+
+      db.collection("benchRatings").doc(safeId).get()
+        .then(doc => {
+          if (doc.exists) {
+            const data = doc.data();
+            
+            // Average ratings for comfort, view, and ambience
+            const comfortAvg = data.comfortTotal / data.comfortCount;
+            const viewAvg = data.viewTotal / data.viewCount;
+            const ambienceAvg = data.ambienceTotal / data.ambienceCount;
+
+            // Calculate overall average
+            const overallAvg = (comfortAvg + viewAvg + ambienceAvg) / 3;
+
+            const text = `Average Ratings:
+                          Comfort: ${comfortAvg.toFixed(1)} (${data.comfortCount} ratings)
+                          View: ${viewAvg.toFixed(1)} (${data.viewCount} ratings)
+                          Ambience: ${ambienceAvg.toFixed(1)} (${data.ambienceCount} ratings)
+                          Overall: ${overallAvg.toFixed(1)}`;
+
+            el.innerText = text;
+            ratingCache[safeId] = text;
+          } else {
+            el.innerText = "No ratings yet.";
+            ratingCache[safeId] = "No ratings yet.";
+          }
+        })
+        .catch(err => {
+          el.innerText = "Rating failed to load.";
+          console.error("Error loading rating:", err);
+        });
+    }
+
+    function sanitizeId(benchId) {
+      return benchId.replace(/\W+/g, '_');
+    }
+
     function searchLocation() {
       const query = document.getElementById('searchInput').value;
-      if (!query) return;
-
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=gb`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.length === 0) {
-            alert("Place not found.");
-            return;
-          }
-          const { lat, lon } = data[0];
-          map.setView([parseFloat(lat), parseFloat(lon)], 15);
-        })
-        .catch(err => console.error('Geocoding error:', err));
+      if (query) {
+        const encodedQuery = encodeURIComponent(query);
+        window.open(`https://www.google.com/maps/search/?q=${encodedQuery}`, '_blank');
+      }
     }
   </script>
 </body>
