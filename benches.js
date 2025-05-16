@@ -207,4 +207,9 @@ function searchLocation() {
         return;
       }
       const { lat, lon } = data[0];
-      map.setView([parseFloat(lat), parseFloat
+      map.setView([parseFloat(lat), parseFloat(lon)], 12);
+    })
+    .catch(err => {
+      console.error("Error fetching location:", err);
+    });
+}
