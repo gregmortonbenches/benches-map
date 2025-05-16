@@ -1,4 +1,4 @@
-// Firebase config
+// Initialize Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
   authDomain: "bench-rating.firebaseapp.com",
@@ -9,9 +9,9 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+
 const ratingCache = {};
 
-// Map setup
 const map = L.map('map', {
   maxBounds: [[48.5, -11], [61.5, 4]],
   maxBoundsViscosity: 1.0
@@ -22,7 +22,6 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Icon
 const benchIcon = L.divIcon({
   className: 'emoji-marker',
   html: '🪑',
@@ -33,40 +32,45 @@ const benchIcon = L.divIcon({
 const markerCluster = L.markerClusterGroup();
 map.addLayer(markerCluster);
 
-// Load benches
+// Load geojson tiles
 for (let row = 0; row < 10; row++) {
   for (let col = 0; col < 10; col++) {
     const url = `data/tile_${row}_${col}.geojson`;
     fetch(url)
-      .then(res => res.ok ? res.json() : Promise.reject(res.status))
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         const layer = L.geoJSON(data, {
           pointToLayer: (feature, latlng) => {
             const props = feature.properties || {};
-            const benchId = props["@id"] || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}`;
-            const name = "Bench";
+            const benchId = props["@id"] || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}_${Math.floor(Math.random() * 1000)}`;
+            const name = props.name || "Unnamed Bench";
 
-            const extraDetails = ['backrest', 'seats', 'material', 'colour']
-              .filter(key => props[key])
-              .map(key => `<div class="detail"><strong>${key}:</strong> ${props[key]}</div>`)
+            const marker = L.marker(latlng, { icon: benchIcon });
+
+            const extras = ["material", "colour", "backrest", "seats"]
+              .filter(k => props[k])
+              .map(k => `<div><strong>${k}:</strong> ${props[k]}</div>`)
               .join('');
 
             const popupHTML = `
               <div class="popup-content">
                 <strong>${name}</strong>
-                <div id="rating-${benchId}">Loading rating...</div>
-                ${extraDetails}
-                <div class="detail">
-                  <label for="rate-${benchId}">Rate:</label>
-                  <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
-                    <option value="">--</option>
-                    ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-                  </select>
+                ${extras}
+                <div id="rating-${benchId}" class="rating-block">
+                  <div class="spinner"></div> Loading rating...
                 </div>
+                <label for="rate-${benchId}">Rate:</label>
+                <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
+                  <option value="">--</option>
+                  ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
+                </select>
+                <div id="thanks-${benchId}" class="thanks-message" style="display:none;">Thanks for rating!</div>
               </div>
             `;
 
-            const marker = L.marker(latlng, { icon: benchIcon });
             marker.bindPopup(popupHTML);
             marker.on('popupopen', () => loadRating(benchId));
             return marker;
@@ -78,13 +82,12 @@ for (let row = 0; row < 10; row++) {
   }
 }
 
-// Load rating
 function loadRating(benchId) {
   const el = document.getElementById(`rating-${benchId}`);
   if (!el) return;
 
   if (ratingCache[benchId]) {
-    el.innerText = ratingCache[benchId];
+    el.innerHTML = ratingCache[benchId];
     return;
   }
 
@@ -92,19 +95,18 @@ function loadRating(benchId) {
     if (doc.exists) {
       const data = doc.data();
       const avg = data.total / data.count;
-      const text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
-      el.innerText = text;
-      ratingCache[benchId] = text;
+      const html = `<strong>Average:</strong> ${avg.toFixed(1)} (${data.count} ratings)`;
+      el.innerHTML = html;
+      ratingCache[benchId] = html;
     } else {
-      el.innerText = "No ratings yet.";
+      el.innerHTML = "No ratings yet.";
       ratingCache[benchId] = "No ratings yet.";
     }
   }).catch(() => {
-    el.innerText = "Rating failed to load.";
+    el.innerHTML = "Rating failed to load.";
   });
 }
 
-// Submit rating
 function submitRating(benchId, value) {
   const rating = parseInt(value);
   if (!rating || rating < 1 || rating > 10) return;
@@ -122,13 +124,18 @@ function submitRating(benchId, value) {
     }
 
     const select = document.getElementById(`rate-${benchId}`);
-    if (select) select.disabled = true;
+    const thanks = document.getElementById(`thanks-${benchId}`);
 
-    setTimeout(() => loadRating(benchId), 500);
+    if (select) select.disabled = true;
+    if (thanks) {
+      thanks.style.display = 'block';
+      setTimeout(() => (thanks.style.display = 'none'), 2500);
+    }
+
+    setTimeout(() => loadRating(benchId), 600);
   });
 }
 
-// Search
 function searchLocation() {
   const query = document.getElementById('searchInput').value;
   if (!query) return;
