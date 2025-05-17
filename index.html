@@ -4,69 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Benches Map</title>
-
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-
-  <!-- Inter Font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: 'Inter', sans-serif;
-      background-color: #121212;
-    }
-    #map {
-      height: calc(100% - 60px);
-      width: 100%;
-    }
-    .header {
-      background-color: #1e1e1e;
-      color: white;
-      padding: 10px 15px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      height: 60px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-      border-bottom: 1px solid #333;
-      border-radius: 0 0 12px 12px;
-    }
+    html, body { margin: 0; padding: 0; height: 100%; font-family: 'Inter', sans-serif; background-color: #121212; }
+    #map { height: calc(100% - 60px); width: 100%; }
+    .header { background-color: #1e1e1e; color: white; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; height: 60px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4); border-bottom: 1px solid #333; border-radius: 0 0 12px 12px; }
     .header h1 { margin: 0; font-size: 18px; }
     .search-container { display: flex; align-items: center; gap: 8px; }
-    .search-container input {
-      padding: 6px;
-      font-size: 14px;
-      border-radius: 6px;
-      border: none;
-      background-color: #2a2a2a;
-      color: #eee;
-    }
-    .search-container button {
-      padding: 6px 10px;
-      font-size: 14px;
-      cursor: pointer;
-      border: none;
-      border-radius: 6px;
-      background-color: #2196F3;
-      color: white;
-    }
+    .search-container input { padding: 6px; font-size: 14px; border-radius: 6px; border: none; background-color: #2a2a2a; color: #eee; }
+    .search-container button { padding: 6px 10px; font-size: 14px; cursor: pointer; border: none; border-radius: 6px; background-color: #2196F3; color: white; }
     .emoji-marker { font-size: 20px; line-height: 1; }
     .popup { color: white; font-size: 14px; background-color: #1e1e1e; }
-    .spinner {
-      display: inline-block;
-      width: 12px; height: 12px;
-      border: 2px solid #fff; border-top: 2px solid #444;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-      margin-right: 4px;
-    }
+    .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #fff; border-top: 2px solid #444; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 4px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .fade-message { margin-top: 4px; color: #4caf50; font-size: 13px; opacity: 1; transition: opacity 0.3s ease; }
     .fade-message.hidden { opacity: 0; }
@@ -83,7 +35,6 @@
   </style>
 </head>
 <body>
-
   <div class="header">
     <h1>Benches Map</h1>
     <div class="search-container">
@@ -91,19 +42,12 @@
       <button onclick="searchLocation()">Search</button>
     </div>
   </div>
-
   <div id="map"></div>
-
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-
   <script>
-    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
       authDomain: "bench-rating.firebaseapp.com",
@@ -137,24 +81,18 @@
     const markerCluster = L.markerClusterGroup();
     map.addLayer(markerCluster);
 
-    // Render stars (interactive if not disabled)
-    function renderStars(rating, max = 5, interactive = false, benchId = "", category = "", disable = false) {
+    function renderStars(rating, max = 5, benchId = "", category = "", disabled = false) {
       let stars = '';
       for (let i = 1; i <= max; i++) {
-        stars += `<span class="star${i <= rating ? ' filled' : ''}${disable ? ' disabled' : ''}"
-          ${interactive && !disable ? `data-value="${i}" data-bench="${benchId}" data-cat="${category}"` : ''}>
-          &#9733;
-        </span>`;
+        stars += `<span class="star${i <= rating ? ' filled' : ''}${disabled ? ' disabled' : ''}" data-value="${i}" data-bench="${benchId}" data-cat="${category}">&#9733;</span>`;
       }
       return stars;
     }
 
-    // User rating key for localStorage
     function getUserRatingKey(benchId) {
       return `benchRated_${benchId}`;
     }
 
-    // Popup content for each bench
     function createPopupContent(props, benchId, name) {
       const extraKeys = ['material', 'colour', 'seats', 'backrest'];
       const extras = extraKeys.filter(k => props[k]).map(k =>
@@ -165,7 +103,7 @@
           <label>${cat.charAt(0).toUpperCase() + cat.slice(1)}:</label>
           <span id="avg-${cat}-${benchId}"><span class="spinner"></span></span>
           <div class="star-rating" id="star-row-${cat}-${benchId}" data-cat="${cat}" data-bench="${benchId}">
-            ${renderStars(0, 5, true, benchId, cat, false)}
+            ${renderStars(0, 5, benchId, cat, false)}
           </div>
         </div>
       `).join('');
@@ -183,14 +121,28 @@
       `;
     }
 
+    function attachStarListeners(benchId) {
+      if (localStorage.getItem(getUserRatingKey(benchId))) return;
+      ratingCategories.forEach(category => {
+        const starRow = document.getElementById(`star-row-${category}-${benchId}`);
+        if (!starRow) return;
+        Array.from(starRow.querySelectorAll('.star')).forEach(star => {
+          if (star.classList.contains('disabled')) return;
+          star.addEventListener('click', function() {
+            const value = parseInt(this.getAttribute('data-value'));
+            handleStarClick(benchId, category, value, this);
+          });
+        });
+      });
+    }
+
     function loadAllRatings(benchId) {
       ratingCategories.forEach(cat => loadCategoryRating(benchId, cat));
       loadCombinedRating(benchId);
+      setTimeout(() => attachStarListeners(benchId), 0);
       if (localStorage.getItem(getUserRatingKey(benchId))) {
         ratingCategories.forEach(cat => disableStars(benchId, cat));
       }
-      // Attach event listeners for stars (in case popup is freshly rendered)
-      setTimeout(() => attachStarListeners(benchId), 0);
     }
 
     function loadCategoryRating(benchId, category) {
@@ -198,7 +150,6 @@
       const starRow = document.getElementById(`star-row-${category}-${benchId}`);
       if (!avgEl || !starRow) return;
       avgEl.innerHTML = `<span class="spinner"></span>`;
-
       db.collection("benchRatings").doc(benchId).get()
         .then(doc => {
           let avg = 0, count = 0;
@@ -210,10 +161,8 @@
           avgEl.innerHTML = count > 0
             ? `${renderStars(Math.round(avg))} (${count} ratings)`
             : "No ratings yet.";
-
-          // Render interactive stars (if not already rated)
-          let disable = !!localStorage.getItem(getUserRatingKey(benchId));
-          starRow.innerHTML = renderStars(0, 5, true, benchId, category, disable);
+          let disabled = !!localStorage.getItem(getUserRatingKey(benchId));
+          starRow.innerHTML = renderStars(0, 5, benchId, category, disabled);
         });
     }
 
@@ -244,29 +193,11 @@
     function disableStars(benchId, category) {
       const starRow = document.getElementById(`star-row-${category}-${benchId}`);
       if (starRow) {
-        // re-render, all disabled
-        starRow.innerHTML = renderStars(0, 5, true, benchId, category, true);
+        starRow.innerHTML = renderStars(0, 5, benchId, category, true);
       }
     }
 
-    // Star click logic
-    function attachStarListeners(benchId) {
-      if (localStorage.getItem(getUserRatingKey(benchId))) return;
-      ratingCategories.forEach(category => {
-        const starRow = document.getElementById(`star-row-${category}-${benchId}`);
-        if (!starRow) return;
-        Array.from(starRow.querySelectorAll('.star')).forEach(star => {
-          if (star.classList.contains('disabled')) return;
-          star.onclick = function() {
-            const value = parseInt(this.getAttribute('data-value'));
-            handleStarClick(benchId, category, value, this);
-          };
-        });
-      });
-    }
-
     function handleStarClick(benchId, category, value, el) {
-      // Visual feedback: fill stars up to clicked
       const starRow = document.getElementById(`star-row-${category}-${benchId}`);
       if (starRow) {
         let stars = starRow.querySelectorAll('.star');
@@ -309,7 +240,6 @@
       });
     }
 
-    // Marker setup
     for (let row = 0; row < 10; row++) {
       for (let col = 0; col < 10; col++) {
         const url = `data/tile_${row}_${col}.geojson`;
