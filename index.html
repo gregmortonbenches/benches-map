@@ -21,12 +21,10 @@
       font-family: 'Inter', sans-serif;
       background-color: #121212;
     }
-
     #map {
       height: calc(100% - 60px);
       width: 100%;
     }
-
     .header {
       background-color: #1e1e1e;
       color: white;
@@ -40,18 +38,8 @@
       border-bottom: 1px solid #333;
       border-radius: 0 0 12px 12px;
     }
-
-    .header h1 {
-      margin: 0;
-      font-size: 18px;
-    }
-
-    .search-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
+    .header h1 { margin: 0; font-size: 18px; }
+    .search-container { display: flex; align-items: center; gap: 8px; }
     .search-container input {
       padding: 6px;
       font-size: 14px;
@@ -60,7 +48,6 @@
       background-color: #2a2a2a;
       color: #eee;
     }
-
     .search-container button {
       padding: 6px 10px;
       font-size: 14px;
@@ -70,69 +57,30 @@
       background-color: #2196F3;
       color: white;
     }
-
-    .emoji-marker {
-      font-size: 20px;
-      line-height: 1;
-    }
-
-    .popup {
-      color: white;
-      font-size: 14px;
-      background-color: #1e1e1e;
-    }
-
-    .popup select {
-      margin-top: 4px;
-      background: #2a2a2a;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 2px 6px;
-    }
-
+    .emoji-marker { font-size: 20px; line-height: 1; }
+    .popup { color: white; font-size: 14px; background-color: #1e1e1e; }
     .spinner {
       display: inline-block;
-      width: 12px;
-      height: 12px;
-      border: 2px solid #fff;
-      border-top: 2px solid #444;
+      width: 12px; height: 12px;
+      border: 2px solid #fff; border-top: 2px solid #444;
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
       margin-right: 4px;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fade-message { margin-top: 4px; color: #4caf50; font-size: 13px; opacity: 1; transition: opacity 0.3s ease; }
+    .fade-message.hidden { opacity: 0; }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .fade-message {
-      margin-top: 4px;
-      color: #4caf50;
-      font-size: 13px;
-      opacity: 1;
-      transition: opacity 0.3s ease;
-    }
-
-    .fade-message.hidden {
-      opacity: 0;
-    }
+    /* Additional style for stars and averages */
+    .star { cursor: pointer; color: #ccc; font-size: 22px; }
+    .star.filled, .star:hover, .star-rating:hover .star { color: gold; }
+    .star.disabled { pointer-events: none; color: #eee; }
+    .combined-rating { margin-top: 8px; font-size: 1.1em; }
 
     @media (max-width: 500px) {
-      .header {
-        flex-direction: column;
-        align-items: flex-start;
-        height: auto;
-      }
-
-      .search-container {
-        width: 100%;
-        margin-top: 5px;
-      }
-
-      .search-container input {
-        width: 100%;
-      }
+      .header { flex-direction: column; align-items: flex-start; height: auto; }
+      .search-container { width: 100%; margin-top: 5px; }
+      .search-container input { width: 100%; }
     }
   </style>
 </head>
@@ -156,9 +104,9 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- Your main script -->
+  <!-- Benches Map Script: FULLY INTEGRATED RATING SYSTEM -->
   <script>
-    // Initialize Firebase
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
       authDomain: "bench-rating.firebaseapp.com",
@@ -170,6 +118,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    const ratingCategories = ['comfort', 'ambience', 'view'];
     const ratingCache = {};
 
     const map = L.map('map', {
@@ -192,6 +141,135 @@
     const markerCluster = L.markerClusterGroup();
     map.addLayer(markerCluster);
 
+    // Utility: Render stars
+    function renderStars(rating) {
+      let stars = '';
+      for (let i = 1; i <= 5; i++) {
+        stars += `<span class="star${i <= rating ? ' filled' : ''}">&#9733;</span>`;
+      }
+      return stars;
+    }
+    function getUserRatingKey(benchId) { return `benchRated_${benchId}`; }
+
+    // Popup content for each bench
+    function createPopupContent(props, benchId, name) {
+      const extraKeys = ['material', 'colour', 'seats', 'backrest'];
+      const extras = extraKeys.filter(k => props[k]).map(k =>
+        `<div><strong>${k}:</strong> ${props[k]}</div>`
+      ).join('');
+      let categoriesHtml = ratingCategories.map(cat => `
+        <div>
+          <label>${cat.charAt(0).toUpperCase() + cat.slice(1)}:</label>
+          <span id="avg-${cat}-${benchId}"><span class="spinner"></span></span>
+          <div class="star-rating" data-cat="${cat}" data-bench="${benchId}">
+            ${[1, 2, 3, 4, 5].map(i =>
+              `<span class="star" data-value="${i}" onclick="submitStarRating('${benchId}','${cat}',${i})">&#9733;</span>`
+            ).join('')}
+          </div>
+        </div>
+      `).join('');
+      return `
+        <div class="popup">
+          <strong>${name}</strong>
+          ${extras}
+          <div>
+            ${categoriesHtml}
+            <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
+            <div id="combined-${benchId}" class="combined-rating"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function loadAllRatings(benchId) {
+      ratingCategories.forEach(cat => loadCategoryRating(benchId, cat));
+      loadCombinedRating(benchId);
+      if (localStorage.getItem(getUserRatingKey(benchId))) {
+        ratingCategories.forEach(cat => disableStars(benchId, cat));
+      }
+    }
+
+    function loadCategoryRating(benchId, category) {
+      const el = document.getElementById(`avg-${category}-${benchId}`);
+      if (!el) return;
+      el.innerHTML = `<span class="spinner"></span>`;
+      db.collection("benchRatings").doc(benchId).get()
+        .then(doc => {
+          let text = "No ratings yet.";
+          if (doc.exists) {
+            const data = doc.data();
+            if (data[category] && data[category].count > 0) {
+              const avg = data[category].total / data[category].count;
+              text = `${renderStars(Math.round(avg))} (${data[category].count} ratings)`;
+            }
+          }
+          el.innerHTML = text;
+        })
+        .catch(() => { el.innerText = "Rating failed to load."; });
+    }
+
+    function loadCombinedRating(benchId) {
+      db.collection("benchRatings").doc(benchId).get()
+        .then(doc => {
+          let el = document.getElementById(`combined-${benchId}`);
+          if (!el) return;
+          let text = "";
+          if (doc.exists) {
+            const data = doc.data();
+            let totalAvg = 0;
+            let validCats = 0;
+            ratingCategories.forEach(cat => {
+              if (data[cat] && data[cat].count > 0) {
+                totalAvg += data[cat].total / data[cat].count;
+                validCats++;
+              }
+            });
+            if (validCats > 0) {
+              const avg = totalAvg / validCats;
+              text = `<strong>Overall average:</strong> ${renderStars(Math.round(avg))}`;
+            }
+          }
+          el.innerHTML = text;
+        });
+    }
+
+    function disableStars(benchId, category) {
+      const stars = document.querySelectorAll(`.star-rating[data-bench="${benchId}"][data-cat="${category}"] .star`);
+      stars.forEach(star => {
+        star.style.pointerEvents = 'none';
+        star.classList.add('disabled');
+      });
+    }
+
+    function submitStarRating(benchId, category, value) {
+      if (localStorage.getItem(getUserRatingKey(benchId))) return;
+      const ref = db.collection("benchRatings").doc(benchId);
+      ref.get().then(doc => {
+        let update = {};
+        if (doc.exists) {
+          const data = doc.data();
+          const cat = data[category] || { total: 0, count: 0 };
+          update[category] = {
+            total: cat.total + value,
+            count: cat.count + 1
+          };
+        } else {
+          update[category] = { total: value, count: 1 };
+        }
+        ref.set(update, { merge: true }).then(() => {
+          const thanksEl = document.getElementById(`thanks-${benchId}`);
+          if (thanksEl) {
+            thanksEl.classList.remove('hidden');
+            setTimeout(() => thanksEl.classList.add('hidden'), 2000);
+          }
+          localStorage.setItem(getUserRatingKey(benchId), '1');
+          ratingCategories.forEach(cat => disableStars(benchId, cat));
+          loadAllRatings(benchId);
+        });
+      });
+    }
+    window.submitStarRating = submitStarRating;
+
     // Load GeoJSON tiles
     for (let row = 0; row < 10; row++) {
       for (let col = 0; col < 10; col++) {
@@ -204,30 +282,10 @@
                 const props = feature.properties || {};
                 const benchId = props["@id"] || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}_${Math.floor(Math.random() * 1000)}`;
                 const name = props.name || "Unnamed Bench";
-
                 const marker = L.marker(latlng, { icon: benchIcon });
-
-                const extras = ['material', 'colour', 'seats', 'backrest']
-                  .filter(key => props[key])
-                  .map(key => `<div><strong>${key}:</strong> ${props[key]}</div>`)
-                  .join('');
-
-                const popupContent = `
-                  <div class="popup">
-                    <strong>${name}</strong>
-                    ${extras}
-                    <div id="rating-${benchId}"><span class="spinner"></span></div>
-                    <label for="rate-${benchId}">Rate:</label>
-                    <select id="rate-${benchId}" onchange="submitRating('${benchId}', this.value)">
-                      <option value="">--</option>
-                      ${[...Array(10)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
-                    </select>
-                    <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
-                  </div>
-                `;
-
+                const popupContent = createPopupContent(props, benchId, name);
                 marker.bindPopup(popupContent);
-                marker.on('popupopen', () => loadRating(benchId));
+                marker.on('popupopen', () => loadAllRatings(benchId));
                 return marker;
               }
             });
@@ -237,77 +295,9 @@
       }
     }
 
-    function loadRating(benchId) {
-      const el = document.getElementById(`rating-${benchId}`);
-      if (!el) return;
-
-      el.innerHTML = `<span class="spinner"></span>`;
-      console.log("Loading rating for:", benchId); // Debugging log
-
-      if (ratingCache[benchId]) {
-        el.innerText = ratingCache[benchId];
-        console.log("Rating from cache:", ratingCache[benchId]); // Debugging log
-        return;
-      }
-
-      db.collection("benchRatings").doc(benchId).get()
-        .then(doc => {
-          if (doc.exists) {
-            const data = doc.data();
-            const avg = data.total / data.count;
-            const text = `Average: ${avg.toFixed(1)} (${data.count} ratings)`;
-            el.innerText = text;
-            ratingCache[benchId] = text;
-            console.log("Loaded rating from Firestore:", text); // Debugging log
-          } else {
-            el.innerText = "No ratings yet.";
-            ratingCache[benchId] = "No ratings yet.";
-            console.log("No ratings found for bench:", benchId); // Debugging log
-          }
-        })
-        .catch(err => {
-          el.innerText = "Rating failed to load.";
-          console.error("Error loading rating:", err); // Debugging log
-        });
-    }
-
-    function submitRating(benchId, value) {
-      const rating = parseInt(value);
-      if (!rating || rating < 1 || rating > 10) return;
-
-      const ref = db.collection("benchRatings").doc(benchId);
-      console.log("Submitting rating:", benchId, rating); // Debugging log
-
-      ref.get().then(doc => {
-        if (doc.exists) {
-          const data = doc.data();
-          ref.set({
-            total: data.total + rating,
-            count: data.count + 1
-          }, { merge: true });
-          console.log("Updated existing rating"); // Debugging log
-        } else {
-          ref.set({ total: rating, count: 1 });
-          console.log("Created new rating"); // Debugging log
-        }
-
-        const select = document.getElementById(`rate-${benchId}`);
-        if (select) select.disabled = true;
-
-        const thanksEl = document.getElementById(`thanks-${benchId}`);
-        if (thanksEl) {
-          thanksEl.classList.remove('hidden');
-          setTimeout(() => thanksEl.classList.add('hidden'), 2500);
-        }
-
-        setTimeout(() => loadRating(benchId), 500);
-      });
-    }
-
     function searchLocation() {
       const query = document.getElementById('searchInput').value;
       if (!query) return;
-
       fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=gb`)
         .then(res => res.json())
         .then(data => {
@@ -321,6 +311,5 @@
         .catch(err => console.error('Geocoding error:', err));
     }
   </script>
-
 </body>
 </html>
