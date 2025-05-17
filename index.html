@@ -172,10 +172,13 @@
     </div>
   </div>
   <script>
-    // BENCH LOADER ANIMATION
+    // BENCH LOADER ANIMATION (white figure, brown bench, smooth & friendly)
     const canvas = document.getElementById('benchLoaderCanvas');
     const ctx = canvas.getContext('2d');
     let frame = 0;
+    // Easing function for smoothness
+    function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+
     function drawBench() {
       ctx.save();
       ctx.fillStyle = "#8B5A2B";
@@ -185,39 +188,52 @@
       ctx.fillRect(40, 80, 140, 10);  // backrest
       ctx.restore();
     }
-    function drawPerson(progress) {
+    function drawPerson(progress, swing=0) {
       // progress: 0 (standing) to 1 (seated)
       const bx = 110, by = 97;
-      // Body Y moves down, angle increases as sitting
-      const bodyY = by - 38 + 18 * progress;
+      const ease = easeOutCubic(progress);
+      // Body position
+      const bodyY = by - 38 + 20 * ease;
       // Head
       ctx.save();
       ctx.beginPath();
       ctx.arc(bx, bodyY, 10, 0, 2 * Math.PI);
-      ctx.fillStyle = "#222";
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      // Smile
+      ctx.beginPath();
+      ctx.arc(bx, bodyY + 3, 4, 0, Math.PI, false);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      // Eyes
+      ctx.beginPath();
+      ctx.arc(bx - 3, bodyY - 2, 1.1, 0, 2 * Math.PI);
+      ctx.arc(bx + 3, bodyY - 2, 1.1, 0, 2 * Math.PI);
+      ctx.fillStyle = "#181818";
       ctx.fill();
       // Body
       ctx.lineWidth = 4;
-      ctx.strokeStyle = "#222";
+      ctx.strokeStyle = "#fff";
       ctx.beginPath();
       ctx.moveTo(bx, bodyY + 10);
-      ctx.lineTo(bx, bodyY + 38 * (1 - 0.45 * progress));
+      ctx.lineTo(bx, bodyY + 38 * (1 - 0.45 * ease));
       ctx.stroke();
       // Arms
       ctx.beginPath();
       ctx.moveTo(bx, bodyY + 18);
-      ctx.lineTo(bx - 18, bodyY + 10 + 12 * progress);
+      ctx.lineTo(bx - 18, bodyY + 10 + 12 * ease);
       ctx.moveTo(bx, bodyY + 18);
-      ctx.lineTo(bx + 18, bodyY + 10 + 12 * progress);
+      ctx.lineTo(bx + 18, bodyY + 10 + 12 * ease);
       ctx.stroke();
-      // Legs (bend as sitting)
+      // Legs
       ctx.beginPath();
-      ctx.moveTo(bx, bodyY + 38 * (1 - 0.45 * progress));
-      ctx.lineTo(bx - 10, by + 20 - 10 * progress);
-      ctx.lineTo(bx - 18, by + 35 - 8 * progress);
-      ctx.moveTo(bx, bodyY + 38 * (1 - 0.45 * progress));
-      ctx.lineTo(bx + 10, by + 20 - 10 * progress);
-      ctx.lineTo(bx + 18, by + 35 - 8 * progress);
+      ctx.moveTo(bx, bodyY + 38 * (1 - 0.45 * ease));
+      ctx.lineTo(bx - 10, by + 18 - 12 * ease + (ease === 1 ? swing : 0));
+      ctx.lineTo(bx - 18, by + 35 - 8 * ease + (ease === 1 ? swing : 0));
+      ctx.moveTo(bx, bodyY + 38 * (1 - 0.45 * ease));
+      ctx.lineTo(bx + 10, by + 18 - 12 * ease - (ease === 1 ? swing : 0));
+      ctx.lineTo(bx + 18, by + 35 - 8 * ease - (ease === 1 ? swing : 0));
       ctx.stroke();
       ctx.restore();
     }
@@ -231,17 +247,14 @@
       if (progress < 1) {
         requestAnimationFrame(animateBenchLoader);
       } else {
-        // After seated, do a little idle "bounce"
+        // After seated, swing feet gently
         let idleFrame = 0;
         function idleBounce() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           drawBench();
-          // Bounce effect
-          const bounce = Math.sin(idleFrame / 10) * 2;
-          ctx.save();
-          ctx.translate(0, bounce);
-          drawPerson(1);
-          ctx.restore();
+          // Swing legs
+          const swing = Math.sin(idleFrame / 12) * 3;
+          drawPerson(1, swing);
           idleFrame++;
           requestAnimationFrame(idleBounce);
         }
