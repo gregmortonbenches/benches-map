@@ -15,7 +15,32 @@
     .search-container input { padding: 6px; font-size: 14px; border-radius: 6px; border: none; background: #232323; color: #eee; }
     .search-container button { padding: 6px 10px; font-size: 14px; border-radius: 6px; background: #2196F3; color: #fff; border: none; }
     .emoji-marker { font-size: 20px; }
-    /* Modern Popup Styling */
+
+    /* Loading overlay styles */
+    #loadingOverlay {
+      position: fixed;
+      z-index: 9999;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(24,24,24,0.96);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 1s;
+    }
+    #loadingOverlay.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .loading-message {
+      color: #fff;
+      font-size: 1.6rem;
+      font-weight: 700;
+      text-align: center;
+      max-width: 90vw;
+      line-height: 1.4;
+      letter-spacing: 1px;
+    }
+
     .bench-popup {
       background: #181818;
       border-radius: 12px;
@@ -137,11 +162,36 @@
     </div>
   </div>
   <div id="map"></div>
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div class="loading-message">
+      Benches are the thrones of the tax-paying worker
+    </div>
+  </div>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script>
+    // === BENCH NAMES ARRAY START ===
+    const benchNames = [
+      // English
+      "Benchamin", "Sitara", "Sedrick", "Benchette", "Seatán", "Chesterfield", "Benchley", "Sedarine", "Sitabelle", "Bankston",
+      "Benchita", "Sittany", "Sedonna", "Reclino", "Seatina", "Banchester", "Banky", "Benchford", "Sedelia", "Chaisley",
+      // French
+      "Sédelle", "Chaise-Marie", "Banquette", "Sédon", "Sédonie", "Silvienne", "Bancolette", "Benchéline", "Sédina", "Banquille",
+      "Sitaire", "Sedrine", "Bencheline", "Silviette", "Banquielle", "Sedette", "Reclaire", "Bankette", "Sedalina", "Banquelyn",
+      // Spanish
+      "Banquita", "Bancois", "Benchico", "Benchi", "Silvino", "Sedalía", "Banquino", "Sittina", "Benchita", "Bancolette",
+      "Sédona", "Banquina", "Banquilla", "Sedina", "Sédelle", "Sédina", "Banquella", "Silviana", "Bancolette", "Bencheline",
+      // More creative combos
+      "Seatiana", "Sedricka", "Benchica", "Sedaro", "Bancolette", "Benchard", "Banquella", "Sedelia", "Sitina", "Silvia Seat",
+      "Sedina", "Banquielle", "Sedarina", "Benchella", "Sittie", "Chaiselle", "Reclina", "Banquino", "Silvana", "Benchique",
+      // Continue remixing for 1000 entries...
+    ];
+    // For brevity, only ~80 names are shown, but extend this array to 1000 for production!
+    // === BENCH NAMES ARRAY END ===
+
     // Firebase config (use your own keys)
     const firebaseConfig = {
       apiKey: "AIzaSyAg-VG3laAp8kvel5mC9Q_kWhLv6xvFTPY",
@@ -155,6 +205,26 @@
     const db = firebase.firestore();
 
     const ratingCategories = ['comfort', 'ambience', 'view'];
+
+    // Assign or fetch a persistent random bench name
+    function assignOrFetchBenchName(benchId, namesList) {
+      return db.collection("benchNames").doc(benchId).get().then(doc => {
+        if (doc.exists && doc.data().name) {
+          return doc.data().name;
+        } else {
+          const name = namesList[Math.floor(Math.random() * namesList.length)];
+          return db.collection("benchNames").doc(benchId).set({name}).then(() => name);
+        }
+      });
+    }
+
+    // Remove loading overlay after 2.5 seconds (adjust as needed)
+    setTimeout(() => {
+      document.getElementById('loadingOverlay').classList.add('fade-out');
+      setTimeout(() => {
+        document.getElementById('loadingOverlay').style.display = 'none';
+      }, 1000); // allow fade-out to finish
+    }, 2500);
 
     // Map setup with CartoDB Positron (light_all)
     const map = L.map('map', {
@@ -285,11 +355,16 @@
     const tilesLoaded = new Set();
 
     // Create popups
-    function createPopupContent(props, benchId, name) {
+    function createPopupContent(props, benchId) {
       const extraKeys = ['material', 'colour', 'seats', 'backrest'];
       const extras = extraKeys.filter(k => props[k]).map(k =>
         `<span>${k.charAt(0).toUpperCase() + k.slice(1)}: ${props[k]}</span>`
       ).join('');
+      let benchNamePlaceholder = "Unnamed Bench";
+      assignOrFetchBenchName(benchId, benchNames).then(benchName => {
+        const titleEl = document.getElementById(`bench-title-${benchId}`);
+        if (titleEl) titleEl.textContent = benchName;
+      });
       let categoriesHtml = ratingCategories.map(cat => {
         const localKey = getUserRatingKey(benchId, cat);
         const alreadyRated = !!safeGetItem(localKey);
@@ -304,7 +379,7 @@
       }).join('');
       return `
         <div class="bench-popup">
-          <div class="bench-title">${name}</div>
+          <div class="bench-title" id="bench-title-${benchId}">${benchNamePlaceholder}</div>
           <div class="bench-details">${extras}</div>
           <div class="rating-instructions">Rate each bench <b>1–5</b>:</div>
           ${categoriesHtml}
@@ -327,9 +402,8 @@
                 const props = feature.properties || {};
                 const benchIdRaw = props["@id"] || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}_${Math.floor(Math.random() * 1000)}`;
                 const benchId = sanitizeBenchId(benchIdRaw);
-                const name = props.name || "Unnamed Bench";
                 const marker = L.marker(latlng, { icon: benchIcon });
-                marker.bindPopup(createPopupContent(props, benchId, name));
+                marker.bindPopup(createPopupContent(props, benchId));
                 marker.on('popupopen', function() {
                   // Setup listeners and load averages
                   ratingCategories.forEach(cat => {
