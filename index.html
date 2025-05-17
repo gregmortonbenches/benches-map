@@ -162,12 +162,94 @@
     </div>
   </div>
   <div id="map"></div>
-  <!-- Loading Overlay -->
+  <!-- Loading Overlay with Canvas Animation -->
   <div id="loadingOverlay">
-    <div class="loading-message">
-      A benche is a tax payer's throne
+    <div style="display:flex;flex-direction:column;align-items:center;">
+      <canvas id="benchLoaderCanvas" width="220" height="140" style="background:transparent;margin-bottom:18px;"></canvas>
+      <div class="loading-message">
+        A benche is a tax payer's throne
+      </div>
     </div>
   </div>
+  <script>
+    // BENCH LOADER ANIMATION
+    const canvas = document.getElementById('benchLoaderCanvas');
+    const ctx = canvas.getContext('2d');
+    let frame = 0;
+    function drawBench() {
+      ctx.save();
+      ctx.fillStyle = "#8B5A2B";
+      ctx.fillRect(40, 100, 140, 12); // seat
+      ctx.fillRect(48, 110, 8, 22);   // left leg
+      ctx.fillRect(164, 110, 8, 22);  // right leg
+      ctx.fillRect(40, 80, 140, 10);  // backrest
+      ctx.restore();
+    }
+    function drawPerson(progress) {
+      // progress: 0 (standing) to 1 (seated)
+      const bx = 110, by = 97;
+      // Body Y moves down, angle increases as sitting
+      const bodyY = by - 38 + 18 * progress;
+      // Head
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(bx, bodyY, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = "#222";
+      ctx.fill();
+      // Body
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#222";
+      ctx.beginPath();
+      ctx.moveTo(bx, bodyY + 10);
+      ctx.lineTo(bx, bodyY + 38 * (1 - 0.45 * progress));
+      ctx.stroke();
+      // Arms
+      ctx.beginPath();
+      ctx.moveTo(bx, bodyY + 18);
+      ctx.lineTo(bx - 18, bodyY + 10 + 12 * progress);
+      ctx.moveTo(bx, bodyY + 18);
+      ctx.lineTo(bx + 18, bodyY + 10 + 12 * progress);
+      ctx.stroke();
+      // Legs (bend as sitting)
+      ctx.beginPath();
+      ctx.moveTo(bx, bodyY + 38 * (1 - 0.45 * progress));
+      ctx.lineTo(bx - 10, by + 20 - 10 * progress);
+      ctx.lineTo(bx - 18, by + 35 - 8 * progress);
+      ctx.moveTo(bx, bodyY + 38 * (1 - 0.45 * progress));
+      ctx.lineTo(bx + 10, by + 20 - 10 * progress);
+      ctx.lineTo(bx + 18, by + 35 - 8 * progress);
+      ctx.stroke();
+      ctx.restore();
+    }
+    function animateBenchLoader() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBench();
+      // Animate sit down: progress from 0 to 1 over 60 frames (~1s)
+      const progress = Math.min(1, frame / 60);
+      drawPerson(progress);
+      frame++;
+      if (progress < 1) {
+        requestAnimationFrame(animateBenchLoader);
+      } else {
+        // After seated, do a little idle "bounce"
+        let idleFrame = 0;
+        function idleBounce() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          drawBench();
+          // Bounce effect
+          const bounce = Math.sin(idleFrame / 10) * 2;
+          ctx.save();
+          ctx.translate(0, bounce);
+          drawPerson(1);
+          ctx.restore();
+          idleFrame++;
+          requestAnimationFrame(idleBounce);
+        }
+        idleBounce();
+      }
+    }
+    animateBenchLoader();
+  </script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
