@@ -22,6 +22,20 @@
     .star.disabled { pointer-events: none; color: #eee; }
     .star-rating { margin-bottom: 8px; }
     .overall-rating { margin-top: 8px; font-weight: bold; }
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid #999;
+      border-top: 2px solid #2196F3;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -75,6 +89,14 @@
       return String(rawId).replace(/\//g, "_");
     }
 
+    // Safer localStorage access (Safari/private mode safe)
+    function safeGetItem(key) {
+      try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function safeSetItem(key, value) {
+      try { localStorage.setItem(key, value); } catch (e) {}
+    }
+
     // FIXED: Complete and correct renderStars
     function renderStars(rating, max = 5, benchId = "", category = "", disabled = false) {
       let stars = '';
@@ -84,12 +106,9 @@
       return stars;
     }
 
-    // NEW: Per-category rating key in localStorage
     function getUserRatingKey(benchId, category) {
       return `benchRated_${benchId}_${category}`;
     }
-
-    // NEW: For overall bench key (if needed)
     function getAnyBenchRatingKeyPrefix(benchId) {
       return `benchRated_${benchId}_`;
     }
@@ -109,7 +128,6 @@
           </div>
         </div>
       `).join('');
-      // Optional: overall average rating display
       let overallHtml = `<div class="overall-rating" id="overall-rating-${benchId}"></div>`;
       return `
         <div class="popup">
@@ -118,16 +136,23 @@
           <div>
             ${categoriesHtml}
             ${overallHtml}
-            <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
+            <div id="thanks-${benchId}" class="fade-message hidden" aria-live="polite">Thanks for rating!</div>
           </div>
         </div>
       `;
     }
 
+    // Remove possible duplicate event listeners (fix for Safari crashes)
+    function removeAllStarListeners(starRow) {
+      const old = starRow.cloneNode(true);
+      starRow.parentNode.replaceChild(old, starRow);
+      return old;
+    }
+
     // Load the average for a category and set up the star row
     function loadCategoryRating(benchId, category) {
       const avgEl = document.getElementById(`avg-${category}-${benchId}`);
-      const starRow = document.getElementById(`star-row-${category}-${benchId}`);
+      let starRow = document.getElementById(`star-row-${category}-${benchId}`);
       if (!avgEl || !starRow) return;
       avgEl.innerHTML = `<span class="spinner"></span>`;
       db.collection("benchRatings").doc(benchId).get()
@@ -141,11 +166,14 @@
           avgEl.innerHTML = count > 0
             ? `${renderStars(Math.round(avg))} (${count} ratings)`
             : "No ratings yet.";
-          let disabled = !!localStorage.getItem(getUserRatingKey(benchId, category));
+          let disabled = !!safeGetItem(getUserRatingKey(benchId, category));
           starRow.innerHTML = renderStars(0, 5, benchId, category, disabled);
 
-          // Attach event delegation for this star row
-          starRow.onclick = function(event) {
+          // Remove all previous event listeners to prevent Safari crash
+          starRow = removeAllStarListeners(starRow);
+
+          // Use addEventListener instead of setting onclick to avoid Safari issues
+          starRow.addEventListener('click', function(event) {
             const target = event.target;
             if (
               target.classList.contains('star') &&
@@ -154,7 +182,14 @@
               const value = parseInt(target.getAttribute('data-value'));
               handleStarClick(benchId, category, value);
             }
-          };
+          });
+          // Keyboard accessibility: allow space/enter
+          starRow.addEventListener('keydown', function(event) {
+            if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('star') && !event.target.classList.contains('disabled')) {
+              const value = parseInt(event.target.getAttribute('data-value'));
+              handleStarClick(benchId, category, value);
+            }
+          });
         });
     }
 
@@ -202,7 +237,7 @@
 
     function submitStarRating(benchId, category, value) {
       // Only prevent rating this metric again; allow other metrics
-      if (localStorage.getItem(getUserRatingKey(benchId, category))) return;
+      if (safeGetItem(getUserRatingKey(benchId, category))) return;
       const ref = db.collection("benchRatings").doc(benchId);
       ref.get().then(doc => {
         let update = {};
@@ -222,11 +257,13 @@
             thanksEl.classList.remove('hidden');
             setTimeout(() => thanksEl.classList.add('hidden'), 2000);
           }
-          localStorage.setItem(getUserRatingKey(benchId, category), '1');
+          safeSetItem(getUserRatingKey(benchId, category), '1');
           // Only disable this metric's stars
           const starRow = document.getElementById(`star-row-${category}-${benchId}`);
           if (starRow) {
             starRow.innerHTML = renderStars(0, 5, benchId, category, true);
+            // Remove all listeners after disabling
+            removeAllStarListeners(starRow);
           }
           // Reload this metric's average and reload overall
           loadCategoryRating(benchId, category);
