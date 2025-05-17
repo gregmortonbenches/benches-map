@@ -21,6 +21,7 @@
     .star.filled { color: gold; }
     .star.disabled { pointer-events: none; color: #eee; }
     .star-rating { margin-bottom: 8px; }
+    .overall-rating { margin-top: 8px; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -77,15 +78,22 @@
     function renderStars(rating, max = 5, benchId = "", category = "", disabled = false) {
       let stars = '';
       for (let i = 1; i <= max; i++) {
-        stars += `<span class="star${i <= rating ? ' filled' : ''}${disabled ? ' disabled' : ''}" data-value="${i}" data-bench="${benchId}" data-cat="${category}" tabindex="0" aria-label="Rate ${i} stars">&#9733;</span>`;
+        stars += `<span class="star${i <= rating ? ' filled' : ''}${disabled ? ' disabled' : ''}" data-value="${i}" data-bench="${benchId}" data-cat="${category}" tabindex="0" aria-label="Rate ${i} star${i>1?'s':''}"></span>`;
       }
       return stars;
     }
 
-    function getUserRatingKey(benchId) {
-      return `benchRated_${benchId}`;
+    // NEW: Per-category rating key in localStorage
+    function getUserRatingKey(benchId, category) {
+      return `benchRated_${benchId}_${category}`;
     }
 
+    // NEW: For overall bench key (if needed)
+    function getAnyBenchRatingKeyPrefix(benchId) {
+      return `benchRated_${benchId}_`;
+    }
+
+    // Renders popup for a bench, including all metrics
     function createPopupContent(props, benchId, name) {
       const extraKeys = ['material', 'colour', 'seats', 'backrest'];
       const extras = extraKeys.filter(k => props[k]).map(k =>
@@ -100,18 +108,22 @@
           </div>
         </div>
       `).join('');
+      // Optional: overall average rating display
+      let overallHtml = `<div class="overall-rating" id="overall-rating-${benchId}"></div>`;
       return `
         <div class="popup">
           <strong>${name}</strong>
           ${extras}
           <div>
             ${categoriesHtml}
+            ${overallHtml}
             <div id="thanks-${benchId}" class="fade-message hidden">Thanks for rating!</div>
           </div>
         </div>
       `;
     }
 
+    // Load the average for a category and set up the star row
     function loadCategoryRating(benchId, category) {
       const avgEl = document.getElementById(`avg-${category}-${benchId}`);
       const starRow = document.getElementById(`star-row-${category}-${benchId}`);
@@ -128,10 +140,10 @@
           avgEl.innerHTML = count > 0
             ? `${renderStars(Math.round(avg))} (${count} ratings)`
             : "No ratings yet.";
-          let disabled = !!localStorage.getItem(getUserRatingKey(benchId));
+          let disabled = !!localStorage.getItem(getUserRatingKey(benchId, category));
           starRow.innerHTML = renderStars(0, 5, benchId, category, disabled);
 
-          // Attach event delegation for this star row (robust against HTML re-rendering)
+          // Attach event delegation for this star row
           starRow.onclick = function(event) {
             const target = event.target;
             if (
@@ -142,6 +154,33 @@
               handleStarClick(benchId, category, value);
             }
           };
+        });
+    }
+
+    // NEW: Load all metrics and show overall average
+    function loadOverallRating(benchId) {
+      db.collection("benchRatings").doc(benchId).get()
+        .then(doc => {
+          const overallEl = document.getElementById(`overall-rating-${benchId}`);
+          if (!overallEl) return;
+          if (doc.exists) {
+            let sum = 0, count = 0;
+            ratingCategories.forEach(cat => {
+              const data = doc.data()[cat];
+              if (data && data.count > 0) {
+                sum += data.total / data.count;
+                count++;
+              }
+            });
+            if (count > 0) {
+              const avg = sum / count;
+              overallEl.innerHTML = `Overall: ${renderStars(Math.round(avg))} (${avg.toFixed(2)} / 5)`;
+            } else {
+              overallEl.innerHTML = 'Overall: No ratings yet.';
+            }
+          } else {
+            overallEl.innerHTML = 'Overall: No ratings yet.';
+          }
         });
     }
 
@@ -161,7 +200,8 @@
     }
 
     function submitStarRating(benchId, category, value) {
-      if (localStorage.getItem(getUserRatingKey(benchId))) return;
+      // Only prevent rating this metric again; allow other metrics
+      if (localStorage.getItem(getUserRatingKey(benchId, category))) return;
       const ref = db.collection("benchRatings").doc(benchId);
       ref.get().then(doc => {
         let update = {};
@@ -181,14 +221,15 @@
             thanksEl.classList.remove('hidden');
             setTimeout(() => thanksEl.classList.add('hidden'), 2000);
           }
-          localStorage.setItem(getUserRatingKey(benchId), '1');
-          // Disable all star rows after rating
-          ratingCategories.forEach(cat => {
-            const starRow = document.getElementById(`star-row-${cat}-${benchId}`);
-            if(starRow) {
-              starRow.innerHTML = renderStars(0, 5, benchId, cat, true);
-            }
-          });
+          localStorage.setItem(getUserRatingKey(benchId, category), '1');
+          // Only disable this metric's stars
+          const starRow = document.getElementById(`star-row-${category}-${benchId}`);
+          if (starRow) {
+            starRow.innerHTML = renderStars(0, 5, benchId, category, true);
+          }
+          // Reload this metric's average and reload overall
+          loadCategoryRating(benchId, category);
+          loadOverallRating(benchId);
         });
       });
     }
@@ -213,6 +254,8 @@
                 marker.on('popupopen', function() {
                   // Load category averages & update star rows
                   ratingCategories.forEach(cat => loadCategoryRating(benchId, cat));
+                  // Load overall rating
+                  loadOverallRating(benchId);
                 });
                 return marker;
               }
