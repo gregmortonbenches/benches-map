@@ -104,7 +104,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- Benches Map Script: FULLY INTEGRATED RATING SYSTEM -->
   <script>
     // Firebase config
     const firebaseConfig = {
@@ -141,17 +140,24 @@
     const markerCluster = L.markerClusterGroup();
     map.addLayer(markerCluster);
 
-    // Utility: Render stars
-    function renderStars(rating) {
+    // ====== STAR RENDERING UTILITY ======
+    function renderStars(rating, max = 5, interactive = false, benchId = "", category = "", disable = false) {
       let stars = '';
-      for (let i = 1; i <= 5; i++) {
-        stars += `<span class="star${i <= rating ? ' filled' : ''}">&#9733;</span>`;
+      for (let i = 1; i <= max; i++) {
+        stars += `<span class="star${i <= rating ? ' filled' : ''}${disable ? ' disabled' : ''}" 
+          ${interactive && !disable ? `onclick="handleStarClick('${benchId}','${category}',${i}, this)"` : ''}>
+          &#9733;
+        </span>`;
       }
       return stars;
     }
-    function getUserRatingKey(benchId) { return `benchRated_${benchId}`; }
 
-    // Popup content for each bench
+    // ====== USER RATING KEY ======
+    function getUserRatingKey(benchId) {
+      return `benchRated_${benchId}`;
+    }
+
+    // ====== POPUP CONTENT GENERATION ======
     function createPopupContent(props, benchId, name) {
       const extraKeys = ['material', 'colour', 'seats', 'backrest'];
       const extras = extraKeys.filter(k => props[k]).map(k =>
@@ -161,13 +167,10 @@
         <div>
           <label>${cat.charAt(0).toUpperCase() + cat.slice(1)}:</label>
           <span id="avg-${cat}-${benchId}"><span class="spinner"></span></span>
-          <div class="star-rating" data-cat="${cat}" data-bench="${benchId}">
-            ${[1, 2, 3, 4, 5].map(i =>
-              `<span class="star" data-value="${i}" onclick="submitStarRating('${benchId}','${cat}',${i})">&#9733;</span>`
-            ).join('')}
-          </div>
+          <div class="star-rating" id="star-row-${cat}-${benchId}" data-cat="${cat}" data-bench="${benchId}"></div>
         </div>
       `).join('');
+
       return `
         <div class="popup">
           <strong>${name}</strong>
@@ -181,6 +184,7 @@
       `;
     }
 
+    // ====== LOAD ALL RATINGS & STARS ======
     function loadAllRatings(benchId) {
       ratingCategories.forEach(cat => loadCategoryRating(benchId, cat));
       loadCombinedRating(benchId);
@@ -190,22 +194,27 @@
     }
 
     function loadCategoryRating(benchId, category) {
-      const el = document.getElementById(`avg-${category}-${benchId}`);
-      if (!el) return;
-      el.innerHTML = `<span class="spinner"></span>`;
+      const avgEl = document.getElementById(`avg-${category}-${benchId}`);
+      const starRow = document.getElementById(`star-row-${category}-${benchId}`);
+      if (!avgEl || !starRow) return;
+      avgEl.innerHTML = `<span class="spinner"></span>`;
+
       db.collection("benchRatings").doc(benchId).get()
         .then(doc => {
-          let text = "No ratings yet.";
-          if (doc.exists) {
-            const data = doc.data();
-            if (data[category] && data[category].count > 0) {
-              const avg = data[category].total / data[category].count;
-              text = `${renderStars(Math.round(avg))} (${data[category].count} ratings)`;
-            }
+          let avg = 0, count = 0;
+          if (doc.exists && doc.data()[category]) {
+            const data = doc.data()[category];
+            avg = data.total / data.count;
+            count = data.count;
           }
-          el.innerHTML = text;
-        })
-        .catch(() => { el.innerText = "Rating failed to load."; });
+          avgEl.innerHTML = count > 0
+            ? `${renderStars(Math.round(avg))} (${count} ratings)`
+            : "No ratings yet.";
+
+          // Render interactive stars (if not already rated)
+          let disable = !!localStorage.getItem(getUserRatingKey(benchId));
+          starRow.innerHTML = renderStars(0, 5, true, benchId, category, disable);
+        });
     }
 
     function loadCombinedRating(benchId) {
@@ -216,8 +225,7 @@
           let text = "";
           if (doc.exists) {
             const data = doc.data();
-            let totalAvg = 0;
-            let validCats = 0;
+            let totalAvg = 0, validCats = 0;
             ratingCategories.forEach(cat => {
               if (data[cat] && data[cat].count > 0) {
                 totalAvg += data[cat].total / data[cat].count;
@@ -234,12 +242,30 @@
     }
 
     function disableStars(benchId, category) {
-      const stars = document.querySelectorAll(`.star-rating[data-bench="${benchId}"][data-cat="${category}"] .star`);
-      stars.forEach(star => {
-        star.style.pointerEvents = 'none';
-        star.classList.add('disabled');
-      });
+      const starRow = document.getElementById(`star-row-${category}-${benchId}`);
+      if (starRow) {
+        // re-render, all disabled
+        starRow.innerHTML = renderStars(0, 5, true, benchId, category, true);
+      }
     }
+
+    // ====== STAR CLICK HANDLER ======
+    window.handleStarClick = function(benchId, category, value, el) {
+      // Visual feedback: fill stars up to clicked
+      const starRow = document.getElementById(`star-row-${category}-${benchId}`);
+      if (starRow) {
+        let stars = starRow.querySelectorAll('.star');
+        stars.forEach((star, idx) => {
+          if (idx < value) {
+            star.classList.add('filled');
+          } else {
+            star.classList.remove('filled');
+          }
+        });
+      }
+      // Save rating
+      submitStarRating(benchId, category, value);
+    };
 
     function submitStarRating(benchId, category, value) {
       if (localStorage.getItem(getUserRatingKey(benchId))) return;
@@ -268,9 +294,8 @@
         });
       });
     }
-    window.submitStarRating = submitStarRating;
 
-    // Load GeoJSON tiles
+    // ====== MARKER SETUP ======
     for (let row = 0; row < 10; row++) {
       for (let col = 0; col < 10; col++) {
         const url = `data/tile_${row}_${col}.geojson`;
