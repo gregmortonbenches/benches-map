@@ -70,13 +70,11 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .fade-message { margin-top: 4px; color: #4caf50; font-size: 13px; opacity: 1; transition: opacity 0.3s ease; }
     .fade-message.hidden { opacity: 0; }
-
-    /* Additional style for stars and averages */
-    .star { cursor: pointer; color: #ccc; font-size: 22px; }
-    .star.filled, .star:hover, .star-rating:hover .star { color: gold; }
+    .star { cursor: pointer; color: #ccc; font-size: 22px; user-select: none; }
+    .star.filled { color: gold; }
     .star.disabled { pointer-events: none; color: #eee; }
     .combined-rating { margin-top: 8px; font-size: 1.1em; }
-
+    .star-rating { display: inline-block; }
     @media (max-width: 500px) {
       .header { flex-direction: column; align-items: flex-start; height: auto; }
       .search-container { width: 100%; margin-top: 5px; }
@@ -118,7 +116,6 @@
     const db = firebase.firestore();
 
     const ratingCategories = ['comfort', 'ambience', 'view'];
-    const ratingCache = {};
 
     const map = L.map('map', {
       maxBounds: [[48.5, -11], [61.5, 4]],
@@ -140,24 +137,24 @@
     const markerCluster = L.markerClusterGroup();
     map.addLayer(markerCluster);
 
-    // ====== STAR RENDERING UTILITY ======
+    // Render stars (interactive if not disabled)
     function renderStars(rating, max = 5, interactive = false, benchId = "", category = "", disable = false) {
       let stars = '';
       for (let i = 1; i <= max; i++) {
-        stars += `<span class="star${i <= rating ? ' filled' : ''}${disable ? ' disabled' : ''}" 
-          ${interactive && !disable ? `onclick="handleStarClick('${benchId}','${category}',${i}, this)"` : ''}>
+        stars += `<span class="star${i <= rating ? ' filled' : ''}${disable ? ' disabled' : ''}"
+          ${interactive && !disable ? `data-value="${i}" data-bench="${benchId}" data-cat="${category}"` : ''}>
           &#9733;
         </span>`;
       }
       return stars;
     }
 
-    // ====== USER RATING KEY ======
+    // User rating key for localStorage
     function getUserRatingKey(benchId) {
       return `benchRated_${benchId}`;
     }
 
-    // ====== POPUP CONTENT GENERATION ======
+    // Popup content for each bench
     function createPopupContent(props, benchId, name) {
       const extraKeys = ['material', 'colour', 'seats', 'backrest'];
       const extras = extraKeys.filter(k => props[k]).map(k =>
@@ -167,7 +164,9 @@
         <div>
           <label>${cat.charAt(0).toUpperCase() + cat.slice(1)}:</label>
           <span id="avg-${cat}-${benchId}"><span class="spinner"></span></span>
-          <div class="star-rating" id="star-row-${cat}-${benchId}" data-cat="${cat}" data-bench="${benchId}"></div>
+          <div class="star-rating" id="star-row-${cat}-${benchId}" data-cat="${cat}" data-bench="${benchId}">
+            ${renderStars(0, 5, true, benchId, cat, false)}
+          </div>
         </div>
       `).join('');
 
@@ -184,13 +183,14 @@
       `;
     }
 
-    // ====== LOAD ALL RATINGS & STARS ======
     function loadAllRatings(benchId) {
       ratingCategories.forEach(cat => loadCategoryRating(benchId, cat));
       loadCombinedRating(benchId);
       if (localStorage.getItem(getUserRatingKey(benchId))) {
         ratingCategories.forEach(cat => disableStars(benchId, cat));
       }
+      // Attach event listeners for stars (in case popup is freshly rendered)
+      setTimeout(() => attachStarListeners(benchId), 0);
     }
 
     function loadCategoryRating(benchId, category) {
@@ -249,8 +249,23 @@
       }
     }
 
-    // ====== STAR CLICK HANDLER ======
-    window.handleStarClick = function(benchId, category, value, el) {
+    // Star click logic
+    function attachStarListeners(benchId) {
+      if (localStorage.getItem(getUserRatingKey(benchId))) return;
+      ratingCategories.forEach(category => {
+        const starRow = document.getElementById(`star-row-${category}-${benchId}`);
+        if (!starRow) return;
+        Array.from(starRow.querySelectorAll('.star')).forEach(star => {
+          if (star.classList.contains('disabled')) return;
+          star.onclick = function() {
+            const value = parseInt(this.getAttribute('data-value'));
+            handleStarClick(benchId, category, value, this);
+          };
+        });
+      });
+    }
+
+    function handleStarClick(benchId, category, value, el) {
       // Visual feedback: fill stars up to clicked
       const starRow = document.getElementById(`star-row-${category}-${benchId}`);
       if (starRow) {
@@ -263,9 +278,8 @@
           }
         });
       }
-      // Save rating
       submitStarRating(benchId, category, value);
-    };
+    }
 
     function submitStarRating(benchId, category, value) {
       if (localStorage.getItem(getUserRatingKey(benchId))) return;
@@ -295,7 +309,7 @@
       });
     }
 
-    // ====== MARKER SETUP ======
+    // Marker setup
     for (let row = 0; row < 10; row++) {
       for (let col = 0; col < 10; col++) {
         const url = `data/tile_${row}_${col}.geojson`;
