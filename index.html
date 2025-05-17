@@ -97,7 +97,7 @@
       try { localStorage.setItem(key, value); } catch (e) {}
     }
 
-    // FIXED: Complete and correct renderStars
+    // Render stars HTML
     function renderStars(rating, max = 5, benchId = "", category = "", disabled = false) {
       let stars = '';
       for (let i = 1; i <= max; i++) {
@@ -142,13 +142,6 @@
       `;
     }
 
-    // Remove possible duplicate event listeners (fix for Safari crashes)
-    function removeAllStarListeners(starRow) {
-      const old = starRow.cloneNode(true);
-      starRow.parentNode.replaceChild(old, starRow);
-      return old;
-    }
-
     // Load the average for a category and set up the star row
     function loadCategoryRating(benchId, category) {
       const avgEl = document.getElementById(`avg-${category}-${benchId}`);
@@ -168,32 +161,11 @@
             : "No ratings yet.";
           let disabled = !!safeGetItem(getUserRatingKey(benchId, category));
           starRow.innerHTML = renderStars(0, 5, benchId, category, disabled);
-
-          // Remove all previous event listeners to prevent Safari crash
-          starRow = removeAllStarListeners(starRow);
-
-          // Use addEventListener instead of setting onclick to avoid Safari issues
-          starRow.addEventListener('click', function(event) {
-            const target = event.target;
-            if (
-              target.classList.contains('star') &&
-              !target.classList.contains('disabled')
-            ) {
-              const value = parseInt(target.getAttribute('data-value'));
-              handleStarClick(benchId, category, value);
-            }
-          });
-          // Keyboard accessibility: allow space/enter
-          starRow.addEventListener('keydown', function(event) {
-            if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('star') && !event.target.classList.contains('disabled')) {
-              const value = parseInt(event.target.getAttribute('data-value'));
-              handleStarClick(benchId, category, value);
-            }
-          });
+          // No event listeners here! (all handled globally below)
         });
     }
 
-    // NEW: Load all metrics and show overall average
+    // Load all metrics and show overall average
     function loadOverallRating(benchId) {
       db.collection("benchRatings").doc(benchId).get()
         .then(doc => {
@@ -262,8 +234,6 @@
           const starRow = document.getElementById(`star-row-${category}-${benchId}`);
           if (starRow) {
             starRow.innerHTML = renderStars(0, 5, benchId, category, true);
-            // Remove all listeners after disabling
-            removeAllStarListeners(starRow);
           }
           // Reload this metric's average and reload overall
           loadCategoryRating(benchId, category);
@@ -325,6 +295,34 @@
         })
         .catch(err => console.error('Geocoding error:', err));
     }
+
+    // GLOBAL event delegation for all stars (click/tap/keyboard)
+    document.addEventListener('click', function(event) {
+      if (event.target.classList.contains('star') && !event.target.classList.contains('disabled')) {
+        const benchId = event.target.getAttribute('data-bench');
+        const category = event.target.getAttribute('data-cat');
+        const value = parseInt(event.target.getAttribute('data-value'));
+        handleStarClick(benchId, category, value);
+      }
+    });
+
+    document.addEventListener('touchend', function(event) {
+      if (event.target.classList.contains('star') && !event.target.classList.contains('disabled')) {
+        const benchId = event.target.getAttribute('data-bench');
+        const category = event.target.getAttribute('data-cat');
+        const value = parseInt(event.target.getAttribute('data-value'));
+        handleStarClick(benchId, category, value);
+      }
+    }, { passive: false });
+
+    document.addEventListener('keydown', function(event) {
+      if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('star') && !event.target.classList.contains('disabled')) {
+        const benchId = event.target.getAttribute('data-bench');
+        const category = event.target.getAttribute('data-cat');
+        const value = parseInt(event.target.getAttribute('data-value'));
+        handleStarClick(benchId, category, value);
+      }
+    });
   </script>
 </body>
 </html>
