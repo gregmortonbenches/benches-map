@@ -8,18 +8,113 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; font-family: sans-serif; background: #121212; }
+    html, body { margin: 0; padding: 0; height: 100%; font-family: 'Inter', 'Segoe UI', Arial, sans-serif; background: #121212; }
     #map { height: calc(100% - 60px); width: 100%; }
-    .header { background: #1e1e1e; color: #fff; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; height: 60px; }
-    .search-container input { padding: 6px; font-size: 14px; border-radius: 6px; border: none; background: #2a2a2a; color: #eee; }
+    .header { background: #181818; color: #fff; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; height: 60px; box-shadow: 0 2px 14px rgba(0,0,0,0.15);}
+    .header h1 { font-size: 21px; margin: 0; font-weight: 700; letter-spacing: 1px;}
+    .search-container input { padding: 6px; font-size: 14px; border-radius: 6px; border: none; background: #232323; color: #eee; }
     .search-container button { padding: 6px 10px; font-size: 14px; border-radius: 6px; background: #2196F3; color: #fff; border: none; }
     .emoji-marker { font-size: 20px; }
-    .popup { color: white; font-size: 14px; background: #1e1e1e; }
-    .fade-message { margin-top: 4px; color: #4caf50; font-size: 13px; opacity: 1; transition: opacity 0.3s ease; }
-    .fade-message.hidden { opacity: 0; }
-    .rating-input { width: 44px; border-radius: 5px; border: 1px solid #555; padding: 2px 5px; font-size: 14px; background: #222; color: #fff; margin-right: 5px; }
-    .rating-btn { padding: 2px 10px; font-size: 14px; border-radius: 5px; background: #2196F3; color: #fff; border: none; cursor: pointer; }
-    .rating-btn[disabled] { background: #444; color: #bbb; cursor: not-allowed; }
+    /* Modern Popup Styling */
+    .bench-popup {
+      background: #181818;
+      border-radius: 12px;
+      padding: 16px 16px 10px 16px;
+      color: #eee;
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+      min-width: 220px;
+      max-width: 320px;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.20);
+    }
+    .bench-title {
+      font-weight: 600;
+      font-size: 17px;
+      margin-bottom: 4px;
+      color: #fff;
+      letter-spacing: 0.2px;
+    }
+    .bench-details {
+      font-size: 13px;
+      color: #b5b5b5;
+      margin-bottom: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+    }
+    .rating-instructions {
+      color: #aaa;
+      font-size: 12px;
+      margin-bottom: 4px;
+      margin-top: 2px;
+      letter-spacing: 0.1px;
+    }
+    .rating-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+    }
+    .rating-row label {
+      min-width: 70px;
+      font-size: 14px;
+      color: #f5f5f5;
+      margin-right: 2px;
+      letter-spacing: 0.1px;
+    }
+    .rating-row .rating-hint {
+      color: #888;
+      font-size: 12px;
+      margin-left: 1px;
+      font-weight: 400;
+      letter-spacing: 0.05em;
+    }
+    .rating-input {
+      width: 40px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      background: #232323;
+      color: #fff;
+      font-size: 15px;
+      text-align: center;
+      margin-right: 1px;
+      transition: border 0.2s;
+    }
+    .rating-btn {
+      background: #1f7cff;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      padding: 3px 13px;
+      cursor: pointer;
+      transition: background .2s;
+      margin-right: 3px;
+    }
+    .rating-btn[disabled] {
+      background: #444;
+      color: #bbb;
+      cursor: not-allowed;
+    }
+    .avg-pill {
+      background: #232b35;
+      color: #b2c4e4;
+      border-radius: 12px;
+      font-size: 12px;
+      padding: 2px 9px;
+      margin-left: auto;
+      font-variant-numeric: tabular-nums;
+      min-width: 72px;
+      text-align: center;
+    }
+    .thanks-message {
+      font-size: 13px;
+      color: #4caf50;
+      margin-top: 6px;
+      opacity: 1;
+      transition: opacity 0.3s;
+    }
+    .thanks-message.hidden { opacity: 0; }
     .spinner {
       display: inline-block;
       width: 18px;
@@ -31,8 +126,11 @@
       vertical-align: middle;
       margin-right: 4px;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 540px) {
+      .bench-popup { min-width: 120px; padding: 12px 7px 7px 12px; }
+      .bench-title { font-size: 15px;}
+      .bench-details { font-size: 12px;}
     }
   </style>
 </head>
@@ -62,10 +160,9 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Metrics for rating
     const ratingCategories = ['comfort', 'ambience', 'view'];
 
-    // Initialize map
+    // Map setup
     const map = L.map('map', {
       maxBounds: [[48.5, -11], [61.5, 4]],
       maxBoundsViscosity: 1.0
@@ -83,61 +180,46 @@
       iconAnchor: [12, 24]
     });
 
-    // Marker cluster group
+    // Marker clustering for speed
     const markerCluster = L.markerClusterGroup({
-      // Only spiderfy markers at max zoom for performance
       spiderfyOnMaxZoom: true,
       showCoverageOnHover: false,
-      maxClusterRadius: 40 // smaller cluster radius for less DOM stress
+      maxClusterRadius: 40
     });
     map.addLayer(markerCluster);
 
-    // Sanitize bench id
     function sanitizeBenchId(rawId) {
       return String(rawId).replace(/\//g, "_");
     }
 
-    // Safer localStorage access
+    // Safer localStorage helpers
     function safeGetItem(key) {
       try { return localStorage.getItem(key); } catch (e) { return null; }
     }
     function safeSetItem(key, value) {
       try { localStorage.setItem(key, value); } catch (e) {}
     }
-
-    // Rating key helpers
     function getUserRatingKey(benchId, category) {
       return `benchRatedNum_${benchId}_${category}`;
     }
 
-    // Render popup content for each bench
-    function createPopupContent(props, benchId, name) {
-      const extraKeys = ['material', 'colour', 'seats', 'backrest'];
-      const extras = extraKeys.filter(k => props[k]).map(k =>
-        `<div><strong>${k}:</strong> ${props[k]}</div>`
-      ).join('');
-      // Create simple number input for each metric
-      let categoriesHtml = ratingCategories.map(cat => {
-        const localKey = getUserRatingKey(benchId, cat);
-        const alreadyRated = !!safeGetItem(localKey);
-        return `
-          <div style="margin-bottom:8px;">
-            <label for="input-${cat}-${benchId}">${cat.charAt(0).toUpperCase() + cat.slice(1)}: </label>
-            <input class="rating-input" id="input-${cat}-${benchId}" type="number" min="1" max="5" ${alreadyRated ? 'disabled' : ''} />
-            <button class="rating-btn" id="btn-${cat}-${benchId}" data-bench="${benchId}" data-cat="${cat}" ${alreadyRated ? 'disabled' : ''}>Submit</button>
-          </div>
-        `;
-      }).join('');
-      return `
-        <div class="popup">
-          <strong>${name}</strong>
-          ${extras}
-          <div>
-            ${categoriesHtml}
-            <div id="thanks-${benchId}" class="fade-message hidden" aria-live="polite">Thanks for rating!</div>
-          </div>
-        </div>
-      `;
+    // Load and display the average for a metric
+    function loadCategoryAverage(benchId, category) {
+      const avgEl = document.getElementById(`avg-${category}-${benchId}`);
+      if (!avgEl) return;
+      avgEl.innerHTML = `<span class="spinner"></span>`;
+      db.collection("benchRatings").doc(benchId).get()
+        .then(doc => {
+          let avg = 0, count = 0;
+          if (doc.exists && doc.data()[category]) {
+            const data = doc.data()[category];
+            avg = data.total / data.count;
+            count = data.count;
+          }
+          avgEl.innerHTML = count > 0
+            ? `Avg: ${avg.toFixed(2)} (${count})`
+            : 'No ratings yet';
+        });
     }
 
     // Submit a number rating for a metric
@@ -147,12 +229,11 @@
       if (!input || !btn) return;
       const value = parseInt(input.value, 10);
       if (isNaN(value) || value < 1 || value > 5) {
-        input.style.border = "2px solid red";
-        setTimeout(() => { input.style.border = ""; }, 1200);
+        input.style.border = "2px solid #e74c3c";
+        setTimeout(() => { input.style.border = ""; }, 1400);
         return;
       }
-      if (safeGetItem(getUserRatingKey(benchId, category))) return; // already rated
-
+      if (safeGetItem(getUserRatingKey(benchId, category))) return;
       btn.disabled = true;
       input.disabled = true;
       btn.innerHTML = `<span class="spinner"></span>`;
@@ -173,10 +254,11 @@
         ref.set(update, { merge: true }).then(() => {
           safeSetItem(getUserRatingKey(benchId, category), '1');
           btn.innerHTML = "Submitted";
+          loadCategoryAverage(benchId, category);
           const thanksEl = document.getElementById(`thanks-${benchId}`);
           if (thanksEl) {
             thanksEl.classList.remove('hidden');
-            setTimeout(() => thanksEl.classList.add('hidden'), 2000);
+            setTimeout(() => thanksEl.classList.add('hidden'), 1800);
           }
         });
       });
@@ -184,23 +266,18 @@
 
     // Load only visible tiles (speed improvement)
     function getTileUrlsForBounds(bounds) {
-      // Assuming tiles are 10x10 and named tile_row_col.geojson
-      // Calculate which tiles intersect current bounds
-      // UK bounds: lat 48.5-61.5, lng -11 to 4
+      // Assuming 10x10 grid: tile_row_col.geojson
       const tileRows = 10, tileCols = 10;
       const latMin = 48.5, latMax = 61.5, lngMin = -11, lngMax = 4;
       const latStep = (latMax - latMin) / tileRows;
       const lngStep = (lngMax - lngMin) / tileCols;
       const bb = bounds || map.getBounds();
-
-      // Calculate rows/cols in view
       let minRow = Math.floor((bb.getSouth() - latMin) / latStep);
       let maxRow = Math.floor((bb.getNorth() - latMin) / latStep);
       let minCol = Math.floor((bb.getWest() - lngMin) / lngStep);
       let maxCol = Math.floor((bb.getEast() - lngMin) / lngStep);
       minRow = Math.max(0, minRow); maxRow = Math.min(tileRows - 1, maxRow);
       minCol = Math.max(0, minCol); maxCol = Math.min(tileCols - 1, maxCol);
-
       const urls = [];
       for (let row = minRow; row <= maxRow; row++) {
         for (let col = minCol; col <= maxCol; col++) {
@@ -210,82 +287,33 @@
       return urls;
     }
 
-    // Cache to avoid double-loading tiles
+    // Avoid double-loading tiles
     const tilesLoaded = new Set();
 
-    // Load benches for all visible tiles
-    function loadVisibleTiles() {
-      const urls = getTileUrlsForBounds();
-      urls.forEach(url => {
-        if (tilesLoaded.has(url)) return;
-        tilesLoaded.add(url);
-        fetch(url)
-          .then(res => res.ok ? res.json() : Promise.reject(res.status))
-          .then(data => {
-            const layer = L.geoJSON(data, {
-              pointToLayer: (feature, latlng) => {
-                const props = feature.properties || {};
-                const benchIdRaw = props["@id"] || `${latlng.lat.toFixed(5)}_${latlng.lng.toFixed(5)}_${Math.floor(Math.random() * 1000)}`;
-                const benchId = sanitizeBenchId(benchIdRaw);
-                const name = props.name || "Unnamed Bench";
-                const marker = L.marker(latlng, { icon: benchIcon });
-                marker.bindPopup(createPopupContent(props, benchId, name));
-                marker.on('popupopen', function() {
-                  // Setup listeners for number rating buttons on open
-                  ratingCategories.forEach(cat => {
-                    const btn = document.getElementById(`btn-${cat}-${benchId}`);
-                    if (btn) {
-                      btn.onclick = function() {
-                        submitNumberRating(benchId, cat);
-                      };
-                    }
-                  });
-                });
-                return marker;
-              }
-            });
-            markerCluster.addLayer(layer);
-          })
-          .catch(err => console.warn(`Failed to load ${url}:`, err));
-      });
-    }
-
-    // Initial load
-    loadVisibleTiles();
-
-    // Load new tiles on moveend (when map stops panning/zooming)
-    map.on('moveend', loadVisibleTiles);
-
-    // Search functionality
-    document.getElementById('searchBtn').addEventListener('click', searchLocation);
-    document.getElementById('searchInput').addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') searchLocation();
-    });
-
-    function searchLocation() {
-      const query = document.getElementById('searchInput').value;
-      if (!query) return;
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=gb`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.length === 0) {
-            alert("Place not found.");
-            return;
-          }
-          const { lat, lon } = data[0];
-          map.setView([parseFloat(lat), parseFloat(lon)], 15);
-        })
-        .catch(err => console.error('Geocoding error:', err));
-    }
-
-    // Accessibility: allow enter key to submit rating
-    document.addEventListener('keydown', function(event) {
-      if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('rating-input')) {
-        const input = event.target;
-        const [ ,cat, benchId ] = input.id.split('-');
-        submitNumberRating(benchId, cat);
-      }
-    });
-  </script>
-</body>
-</html>
+    // Create popups
+    function createPopupContent(props, benchId, name) {
+      const extraKeys = ['material', 'colour', 'seats', 'backrest'];
+      const extras = extraKeys.filter(k => props[k]).map(k =>
+        `<span>${k.charAt(0).toUpperCase() + k.slice(1)}: ${props[k]}</span>`
+      ).join('');
+      let categoriesHtml = ratingCategories.map(cat => {
+        const localKey = getUserRatingKey(benchId, cat);
+        const alreadyRated = !!safeGetItem(localKey);
+        return `
+          <div class="rating-row">
+            <label for="input-${cat}-${benchId}">${cat.charAt(0).toUpperCase() + cat.slice(1)}</label>
+            <span class="rating-hint">(1–5)</span>
+            <input class="rating-input" id="input-${cat}-${benchId}" type="number" min="1" max="5" ${alreadyRated ? 'disabled' : ''} />
+            <button class="rating-btn" id="btn-${cat}-${benchId}" data-bench="${benchId}" data-cat="${cat}" ${alreadyRated ? 'disabled' : ''}>Submit</button>
+            <span class="avg-pill" id="avg-${cat}-${benchId}"></span>
+          </div>
+        `;
+      }).join('');
+      return `
+        <div class="bench-popup">
+          <div class="bench-title">${name}</div>
+          <div class="bench-details">${extras}</div>
+          <div class="rating-instructions">Rate each category <b>(1–5)</b>:</div>
+          ${categoriesHtml}
+          <div id="thanks-${benchId}" class="thanks-message hidden" aria`*
+
