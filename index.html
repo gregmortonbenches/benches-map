@@ -17,11 +17,9 @@
     .popup { color: white; font-size: 14px; background: #1e1e1e; }
     .fade-message { margin-top: 4px; color: #4caf50; font-size: 13px; opacity: 1; transition: opacity 0.3s ease; }
     .fade-message.hidden { opacity: 0; }
-    .star { cursor: pointer; color: #ccc; font-size: 22px; user-select: none; }
-    .star.filled { color: gold; }
-    .star.disabled { pointer-events: none; color: #eee; }
-    .star-rating { margin-bottom: 8px; }
-    .overall-rating { margin-top: 8px; font-weight: bold; }
+    .rating-input { width: 44px; border-radius: 5px; border: 1px solid #555; padding: 2px 5px; font-size: 14px; background: #222; color: #fff; margin-right: 5px; }
+    .rating-btn { padding: 2px 10px; font-size: 14px; border-radius: 5px; background: #2196F3; color: #fff; border: none; cursor: pointer; }
+    .rating-btn[disabled] { background: #444; color: #bbb; cursor: not-allowed; }
     .spinner {
       display: inline-block;
       width: 18px;
@@ -64,7 +62,10 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    // Metrics for rating
     const ratingCategories = ['comfort', 'ambience', 'view'];
+
+    // Initialize map
     const map = L.map('map', {
       maxBounds: [[48.5, -11], [61.5, 4]],
       maxBoundsViscosity: 1.0
@@ -82,14 +83,21 @@
       iconAnchor: [12, 24]
     });
 
-    const markerCluster = L.markerClusterGroup();
+    // Marker cluster group
+    const markerCluster = L.markerClusterGroup({
+      // Only spiderfy markers at max zoom for performance
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      maxClusterRadius: 40 // smaller cluster radius for less DOM stress
+    });
     map.addLayer(markerCluster);
 
+    // Sanitize bench id
     function sanitizeBenchId(rawId) {
       return String(rawId).replace(/\//g, "_");
     }
 
-    // Safer localStorage access (Safari/private mode safe)
+    // Safer localStorage access
     function safeGetItem(key) {
       try { return localStorage.getItem(key); } catch (e) { return null; }
     }
@@ -97,119 +105,58 @@
       try { localStorage.setItem(key, value); } catch (e) {}
     }
 
-    // Render stars HTML
-    function renderStars(rating, max = 5, benchId = "", category = "", disabled = false) {
-      let stars = '';
-      for (let i = 1; i <= max; i++) {
-        stars += `<span class="star${i <= rating ? ' filled' : ''}${disabled ? ' disabled' : ''}" data-value="${i}" data-bench="${benchId}" data-cat="${category}" tabindex="0" aria-label="Rate ${i} star">${'★'}</span>`;
-      }
-      return stars;
-    }
-
+    // Rating key helpers
     function getUserRatingKey(benchId, category) {
-      return `benchRated_${benchId}_${category}`;
-    }
-    function getAnyBenchRatingKeyPrefix(benchId) {
-      return `benchRated_${benchId}_`;
+      return `benchRatedNum_${benchId}_${category}`;
     }
 
-    // Renders popup for a bench, including all metrics
+    // Render popup content for each bench
     function createPopupContent(props, benchId, name) {
       const extraKeys = ['material', 'colour', 'seats', 'backrest'];
       const extras = extraKeys.filter(k => props[k]).map(k =>
         `<div><strong>${k}:</strong> ${props[k]}</div>`
       ).join('');
-      let categoriesHtml = ratingCategories.map(cat => `
-        <div>
-          <label>${cat.charAt(0).toUpperCase() + cat.slice(1)}:</label>
-          <span id="avg-${cat}-${benchId}"><span class="spinner"></span></span>
-          <div class="star-rating" id="star-row-${cat}-${benchId}" data-cat="${cat}" data-bench="${benchId}">
-            ${renderStars(0, 5, benchId, cat, false)}
+      // Create simple number input for each metric
+      let categoriesHtml = ratingCategories.map(cat => {
+        const localKey = getUserRatingKey(benchId, cat);
+        const alreadyRated = !!safeGetItem(localKey);
+        return `
+          <div style="margin-bottom:8px;">
+            <label for="input-${cat}-${benchId}">${cat.charAt(0).toUpperCase() + cat.slice(1)}: </label>
+            <input class="rating-input" id="input-${cat}-${benchId}" type="number" min="1" max="5" ${alreadyRated ? 'disabled' : ''} />
+            <button class="rating-btn" id="btn-${cat}-${benchId}" data-bench="${benchId}" data-cat="${cat}" ${alreadyRated ? 'disabled' : ''}>Submit</button>
           </div>
-        </div>
-      `).join('');
-      let overallHtml = `<div class="overall-rating" id="overall-rating-${benchId}"></div>`;
+        `;
+      }).join('');
       return `
         <div class="popup">
           <strong>${name}</strong>
           ${extras}
           <div>
             ${categoriesHtml}
-            ${overallHtml}
             <div id="thanks-${benchId}" class="fade-message hidden" aria-live="polite">Thanks for rating!</div>
           </div>
         </div>
       `;
     }
 
-    // Load the average for a category and set up the star row
-    function loadCategoryRating(benchId, category) {
-      const avgEl = document.getElementById(`avg-${category}-${benchId}`);
-      let starRow = document.getElementById(`star-row-${category}-${benchId}`);
-      if (!avgEl || !starRow) return;
-      avgEl.innerHTML = `<span class="spinner"></span>`;
-      db.collection("benchRatings").doc(benchId).get()
-        .then(doc => {
-          let avg = 0, count = 0;
-          if (doc.exists && doc.data()[category]) {
-            const data = doc.data()[category];
-            avg = data.total / data.count;
-            count = data.count;
-          }
-          avgEl.innerHTML = count > 0
-            ? `${renderStars(Math.round(avg))} (${count} ratings)`
-            : "No ratings yet.";
-          let disabled = !!safeGetItem(getUserRatingKey(benchId, category));
-          starRow.innerHTML = renderStars(0, 5, benchId, category, disabled);
-          // No event listeners here! (all handled globally below)
-        });
-    }
-
-    // Load all metrics and show overall average
-    function loadOverallRating(benchId) {
-      db.collection("benchRatings").doc(benchId).get()
-        .then(doc => {
-          const overallEl = document.getElementById(`overall-rating-${benchId}`);
-          if (!overallEl) return;
-          if (doc.exists) {
-            let sum = 0, count = 0;
-            ratingCategories.forEach(cat => {
-              const data = doc.data()[cat];
-              if (data && data.count > 0) {
-                sum += data.total / data.count;
-                count++;
-              }
-            });
-            if (count > 0) {
-              const avg = sum / count;
-              overallEl.innerHTML = `Overall: ${renderStars(Math.round(avg))} (${avg.toFixed(2)} / 5)`;
-            } else {
-              overallEl.innerHTML = 'Overall: No ratings yet.';
-            }
-          } else {
-            overallEl.innerHTML = 'Overall: No ratings yet.';
-          }
-        });
-    }
-
-    function handleStarClick(benchId, category, value) {
-      const starRow = document.getElementById(`star-row-${category}-${benchId}`);
-      if (starRow) {
-        let stars = starRow.querySelectorAll('.star');
-        stars.forEach((star, idx) => {
-          if (idx < value) {
-            star.classList.add('filled');
-          } else {
-            star.classList.remove('filled');
-          }
-        });
+    // Submit a number rating for a metric
+    function submitNumberRating(benchId, category) {
+      const input = document.getElementById(`input-${category}-${benchId}`);
+      const btn = document.getElementById(`btn-${category}-${benchId}`);
+      if (!input || !btn) return;
+      const value = parseInt(input.value, 10);
+      if (isNaN(value) || value < 1 || value > 5) {
+        input.style.border = "2px solid red";
+        setTimeout(() => { input.style.border = ""; }, 1200);
+        return;
       }
-      submitStarRating(benchId, category, value);
-    }
+      if (safeGetItem(getUserRatingKey(benchId, category))) return; // already rated
 
-    function submitStarRating(benchId, category, value) {
-      // Only prevent rating this metric again; allow other metrics
-      if (safeGetItem(getUserRatingKey(benchId, category))) return;
+      btn.disabled = true;
+      input.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span>`;
+
       const ref = db.collection("benchRatings").doc(benchId);
       ref.get().then(doc => {
         let update = {};
@@ -224,28 +171,54 @@
           update[category] = { total: value, count: 1 };
         }
         ref.set(update, { merge: true }).then(() => {
+          safeSetItem(getUserRatingKey(benchId, category), '1');
+          btn.innerHTML = "Submitted";
           const thanksEl = document.getElementById(`thanks-${benchId}`);
           if (thanksEl) {
             thanksEl.classList.remove('hidden');
             setTimeout(() => thanksEl.classList.add('hidden'), 2000);
           }
-          safeSetItem(getUserRatingKey(benchId, category), '1');
-          // Only disable this metric's stars
-          const starRow = document.getElementById(`star-row-${category}-${benchId}`);
-          if (starRow) {
-            starRow.innerHTML = renderStars(0, 5, benchId, category, true);
-          }
-          // Reload this metric's average and reload overall
-          loadCategoryRating(benchId, category);
-          loadOverallRating(benchId);
         });
       });
     }
 
-    // MAIN: Load benches
-    for (let row = 0; row < 10; row++) {
-      for (let col = 0; col < 10; col++) {
-        const url = `data/tile_${row}_${col}.geojson`;
+    // Load only visible tiles (speed improvement)
+    function getTileUrlsForBounds(bounds) {
+      // Assuming tiles are 10x10 and named tile_row_col.geojson
+      // Calculate which tiles intersect current bounds
+      // UK bounds: lat 48.5-61.5, lng -11 to 4
+      const tileRows = 10, tileCols = 10;
+      const latMin = 48.5, latMax = 61.5, lngMin = -11, lngMax = 4;
+      const latStep = (latMax - latMin) / tileRows;
+      const lngStep = (lngMax - lngMin) / tileCols;
+      const bb = bounds || map.getBounds();
+
+      // Calculate rows/cols in view
+      let minRow = Math.floor((bb.getSouth() - latMin) / latStep);
+      let maxRow = Math.floor((bb.getNorth() - latMin) / latStep);
+      let minCol = Math.floor((bb.getWest() - lngMin) / lngStep);
+      let maxCol = Math.floor((bb.getEast() - lngMin) / lngStep);
+      minRow = Math.max(0, minRow); maxRow = Math.min(tileRows - 1, maxRow);
+      minCol = Math.max(0, minCol); maxCol = Math.min(tileCols - 1, maxCol);
+
+      const urls = [];
+      for (let row = minRow; row <= maxRow; row++) {
+        for (let col = minCol; col <= maxCol; col++) {
+          urls.push(`data/tile_${row}_${col}.geojson`);
+        }
+      }
+      return urls;
+    }
+
+    // Cache to avoid double-loading tiles
+    const tilesLoaded = new Set();
+
+    // Load benches for all visible tiles
+    function loadVisibleTiles() {
+      const urls = getTileUrlsForBounds();
+      urls.forEach(url => {
+        if (tilesLoaded.has(url)) return;
+        tilesLoaded.add(url);
         fetch(url)
           .then(res => res.ok ? res.json() : Promise.reject(res.status))
           .then(data => {
@@ -256,14 +229,17 @@
                 const benchId = sanitizeBenchId(benchIdRaw);
                 const name = props.name || "Unnamed Bench";
                 const marker = L.marker(latlng, { icon: benchIcon });
-                const popupContent = createPopupContent(props, benchId, name);
-                marker.bindPopup(popupContent);
-
+                marker.bindPopup(createPopupContent(props, benchId, name));
                 marker.on('popupopen', function() {
-                  // Load category averages & update star rows
-                  ratingCategories.forEach(cat => loadCategoryRating(benchId, cat));
-                  // Load overall rating
-                  loadOverallRating(benchId);
+                  // Setup listeners for number rating buttons on open
+                  ratingCategories.forEach(cat => {
+                    const btn = document.getElementById(`btn-${cat}-${benchId}`);
+                    if (btn) {
+                      btn.onclick = function() {
+                        submitNumberRating(benchId, cat);
+                      };
+                    }
+                  });
                 });
                 return marker;
               }
@@ -271,8 +247,14 @@
             markerCluster.addLayer(layer);
           })
           .catch(err => console.warn(`Failed to load ${url}:`, err));
-      }
+      });
     }
+
+    // Initial load
+    loadVisibleTiles();
+
+    // Load new tiles on moveend (when map stops panning/zooming)
+    map.on('moveend', loadVisibleTiles);
 
     // Search functionality
     document.getElementById('searchBtn').addEventListener('click', searchLocation);
@@ -296,31 +278,12 @@
         .catch(err => console.error('Geocoding error:', err));
     }
 
-    // GLOBAL event delegation for all stars (click/tap/keyboard)
-    document.addEventListener('click', function(event) {
-      if (event.target.classList.contains('star') && !event.target.classList.contains('disabled')) {
-        const benchId = event.target.getAttribute('data-bench');
-        const category = event.target.getAttribute('data-cat');
-        const value = parseInt(event.target.getAttribute('data-value'));
-        handleStarClick(benchId, category, value);
-      }
-    });
-
-    document.addEventListener('touchend', function(event) {
-      if (event.target.classList.contains('star') && !event.target.classList.contains('disabled')) {
-        const benchId = event.target.getAttribute('data-bench');
-        const category = event.target.getAttribute('data-cat');
-        const value = parseInt(event.target.getAttribute('data-value'));
-        handleStarClick(benchId, category, value);
-      }
-    }, { passive: false });
-
+    // Accessibility: allow enter key to submit rating
     document.addEventListener('keydown', function(event) {
-      if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('star') && !event.target.classList.contains('disabled')) {
-        const benchId = event.target.getAttribute('data-bench');
-        const category = event.target.getAttribute('data-cat');
-        const value = parseInt(event.target.getAttribute('data-value'));
-        handleStarClick(benchId, category, value);
+      if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains('rating-input')) {
+        const input = event.target;
+        const [ ,cat, benchId ] = input.id.split('-');
+        submitNumberRating(benchId, cat);
       }
     });
   </script>
